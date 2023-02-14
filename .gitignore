@@ -37,3 +37,13 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Other types of files and directories to avoid adding any actual data
+*.html
+*.RData
+*sample*/
+*analysis/
+*.txt
+*.csv
+*.rds
+.DS_Store

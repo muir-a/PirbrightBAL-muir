@@ -1,0 +1,322 @@
+---
+title: "ClusteringPigBAL"
+author: "Arianne Richard"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Intro
+
+This script picks up where "processing all.Rmd" left off.
+
+We will load the data, cluster, subcluster, remove doublet clusters, make direct cluster comparisons, etc, in order to come up with the best dataset for annotation.
+
+# Clustering
+
+## Reading in the data
+
+```{r}
+library(SingleCellExperiment)
+library(DropletUtils)
+library(scran)
+library(scater)
+library(uwot)
+library(biomaRt)
+library(scds)
+library(batchelor)
+
+load('ongoing_full.RData')
+
+```
+
+## Clustering the data
+
+Now we cluster the data, look at sample contribution to each cluster, and find marker genes for each cluster for annotation.
+
+We'll use the graph-based clustering implemented in bluster, specifically using jaccard index to weight edges and the louvain method for community detection, with a k value of 20. This is largely because this combination gave us a reasonable number of clusters with decent quality metrics after trying a variety of different options. Thus we will run this on the batch-corrected data and look at distribution of samples across clusters and top marker genes for each cluster.
+
+```{r}
+library(bluster)
+
+# parameters were carefully chose
+set.seed(200)
+sce_all_corrected_clust <- clusterCells(sce_all_corrected,
+                                        use.dimred="corrected",
+                                        BLUSPARAM=SNNGraphParam(k=20, 
+                                                                type="jaccard",
+                                                                cluster.fun="louvain"))
+
+table(sce_all_corrected_clust)
+sce_all_corrected$cluster <- sce_all_corrected_clust
+
+plotUMAP(sce_all_corrected, colour_by="cluster", point_size=0.3)
+plotTSNE(sce_all_corrected, colour_by="cluster", point_size=0.3)
+plotReducedDim(sce_all_corrected, dimred='corrected', colour_by="cluster", point_size=0.1, ncomponents=5)
+
+
+dat <- as.data.frame(table(sce_all_corrected$cluster, sce_all_corrected$Sample))
+colnames(dat) <- c('cluster', 'sample', 'n_cells')
+
+ggplot(dat, aes(fill=sample, y=n_cells, x=cluster)) +
+  geom_bar(position='stack', stat='identity')
+
+marker.info.corrected <- scoreMarkers(sce_all_corrected, 
+                                      groups=sce_all_corrected$cluster,
+                                      assay.type='reconstructed',
+                                      full.stats=TRUE)
+
+for(i in 1:length(marker.info.corrected)){
+  ord <- marker.info.corrected[[i]][order(marker.info.corrected[[i]]$mean.logFC.cohen, decreasing=TRUE),]
+  ord$symbol <- rowData(sce_all)[rownames(ord), 'Symbol']
+  write.table(ord, 
+              paste0('Jan2023analysis/cluster', as.character(i), 'markers.txt'), 
+              quote=F)
+}
+
+```
+
+## Evaluating the clustering 
+
+We will now run several metrics to evaluate how well our cells are clustered, thinking about whether they have been either over- or under-clustered. 
+
+First we'll look at the silhouette widths, which incorporates both the distances to other cells in the same cluster as well as the distances to cells in other clusters. The plot we make will colour cells according to their nearest cluster if they have a negative silhouette width.
+
+```{r}
+
+sil.approx <- approxSilhouette(reducedDim(sce_all_corrected, "corrected"), clusters=sce_all_corrected$cluster)
+sil.approx
+sil.data <- as.data.frame(sil.approx)
+sil.data$closest <- factor(ifelse(sil.data$width > 0, sce_all_corrected$cluster, sil.data$other))
+sil.data$cluster <- sce_all_corrected$cluster
+
+ggplot(sil.data, aes(x=cluster, y=width, colour=closest)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+```
+
+This shows some potential issues particularly with clusters 5 and 17.
+
+To better separate the factors that contribute to this metric, we'll divide out purity and heterogeneity, first looking at cluster purity. Here again cells are coloured according to their nearest cluster if their purity is particularly low.
+
+```{r}
+
+pure <- neighborPurity(reducedDim(sce_all_corrected, "corrected"), sce_all_corrected$cluster)
+pure
+
+pure.data <- as.data.frame(pure)
+pure.data$maximum <- factor(pure.data$maximum)
+pure.data$cluster <- sce_all_corrected$cluster
+
+ggplot(pure.data, aes(x=cluster, y=purity, colour=maximum)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+
+table(Cluster=sce_all_corrected$cluster, pure.data$maximum)
+```
+
+Here it looks like the lowest purity is in clusters 1, 4, 6, and 7. 17 is somewhat unpure, which may have contributed to the silhouette width results, while cluster 5 looks extremely pure, suggesting its issue is more likely inter-cluster heterogeneity.
+
+And finally we'll look at the heterogeneity within each cluster by computing the within cluster sum of squares.
+
+```{r}
+rmsd <- clusterRMSD(reducedDim(sce_all_corrected, "corrected"), sce_all_corrected$cluster)
+barplot(rmsd, ylab="RMSD", xlab="Cluster")
+
+```
+
+And now we can see what the particularly low silhouette width from cluster 5 was all about - it's more heterogeneous than the others. 
+
+Let's have a look at this cluster, also thinking about QC metrics.
+
+```{r}
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='5'], colour_by="batch", point_size=1, by_exprs_values='reconstructed')
+plotTSNE(sce_all_corrected[,sce_all_corrected$cluster=='5'], colour_by="batch", point_size=1, by_exprs_values='reconstructed')
+plotReducedDim(sce_all_corrected[,sce_all_corrected$cluster=='5'], dimred='corrected', colour_by="batch", point_size=0.1, by_exprs_values='reconstructed', ncomponents=5)
+
+QC.tab <- data.frame(colData(sce_all_corrected)[,c('cluster', 'sum_counts', 'mito_ratio', 'genes_detected')])
+
+ggplot(QC.tab, aes(x=cluster, y=log2(sum_counts))) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+
+ggplot(QC.tab, aes(x=cluster, y=log2(genes_detected))) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+
+ggplot(QC.tab, aes(x=cluster, y=mito_ratio)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+
+props5 <- prop.table(table(sce_all_corrected$cluster, sce_all_corrected$Sample), margin=2)['5',]
+barplot(props5)
+dfprops5 <- annot[,c('Condition', 'Sex')]
+dfprops5$propC5 <- props5[rownames(dfprops5)]
+ggplot(dfprops5, aes(x=Condition, y=propC5)) +
+  geom_dotplot(
+  binaxis = "y", stackdir = "center",
+  fill = "blue"
+  )
+
+```
+
+So it looks from the UMAP and TSNE plots like there are some cells that are quite different than the bulk of the cluster for each of these. One option we have is to sub-cluster even more. It's possible the distant cells are just contaminating from other clusters. 
+
+However, the other issue that becomes quite apparent when looking at the QC metrics is that the cells have substantially lower total counts and genes detected than the other clusters. From the marker genes, these cells don't really have specific positive defining features and their main shared characteristic seems to be lack of expression of particular genes. I suspect that this is a set of heterogeneous poor-quality cells that have been clustered together based on their dying features. To me, the best bet will be exclusion.
+
+The percentage in each sample varies but there don't appear to be any strong associations with condition. 
+
+## Doublet inspection
+
+It may be the case that our suspected doublets, which fell in a particular region of the UMAP, have formed their own cluster. This is a convenient means of removing them as we can get rid of the whole cluster and don't have to question a threshold for suspected doublet value. 
+
+```{r}
+prop.table(table(sce_all_corrected$cluster, sce_all_corrected$query_doublet), margin=1)
+
+doublet.tab <- data.frame(colData(sce_all_corrected)[,c('cxds_score', 'cluster', 'query_doublet', 'sum_counts')])
+
+ggplot(doublet.tab, aes(x=cluster, y=cxds_score, colour=query_doublet)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+
+ggplot(doublet.tab, aes(x=cluster, y=sum_counts, colour=query_doublet)) +
+    ggbeeswarm::geom_quasirandom(method="smiley")
+```
+
+These data strongly suggest that cluster 17 is largely composed of doublets. Let's look at the top marker genes to make sure we aren't getting rid of something unique, and check its representation across samples.
+
+```{r}
+plotUMAP(sce_all_corrected, by_exprs_values='reconstructed', color_by='ENSSSCG00000036246')
+plotUMAP(sce_all_corrected, by_exprs_values='reconstructed', color_by='ENSSSCG00000005503')
+plotUMAP(sce_all_corrected, by_exprs_values='reconstructed', color_by='ENSSSCG00000006296')
+
+barplot(prop.table(table(sce_all_corrected$cluster, sce_all_corrected$Sample), margin=2)['17',])
+
+```
+
+This looks fine. On these grounds we should likely exclude cluster 17 as doublets.
+
+The last thing to think about is cluster 11, which has a large percentage of suspected doublets and did exhibit a strange mix of B cell and myeloid markers. Let's look at these cells individually to see if there is a subset of co-expressors that could be some sort of doublets.
+
+```{r}
+
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by="batch", point_size=1, by_exprs_values='reconstructed')
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by="query_doublet", point_size=1, by_exprs_values='reconstructed')
+
+## CD163
+CD163 <- rownames(sce_all_corrected)[rowData(sce_all_corrected)$Symbol == 'CD163']
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by=CD163, point_size=1, by_exprs_values='reconstructed')
+## TNFRSF17
+TNFRSF17 <- rownames(sce_all_corrected)[rowData(sce_all_corrected)$Symbol == 'TNFRSF17']
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by=TNFRSF17, point_size=1, by_exprs_values='reconstructed')
+## TNFRSF13B
+TNFRSF13B <- rownames(sce_all_corrected)[rowData(sce_all_corrected)$Symbol == 'TNFRSF13B']
+plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by=TNFRSF13B, point_size=1, by_exprs_values='reconstructed')
+
+### make some heatmaps to see what is going on
+
+gene_list <- rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`1`, decreasing=TRUE)][1:20]
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`4`, decreasing=TRUE)][1:20])
+
+gene_list <- gene_list[!duplicated(gene_list)]
+
+library(pheatmap)
+mat <- assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster == '11']
+mat_doub <- sce_all_corrected$query_doublet[sce_all_corrected$cluster =='11']
+rownames(mat) <- rowData(sce_all_corrected)[rownames(mat), 'Symbol']
+colannot <- data.frame(doublet=factor(mat_doub))
+rownames(colannot) <- colnames(mat)
+
+pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot)
+
+
+
+## also want to grab handful of cells from myeloid and B cell clusters to see how these outlier cells compare
+
+library(pheatmap)
+mat <- assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster %in% c('1', '4')]
+mat_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('1', '4')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat_clust), 0.005*length(mat_clust), replace=FALSE)
+mat <- mat[, inds]
+mat_clust <- mat_clust[inds]
+
+mat2 <- assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster %in% c('2', '3')]
+mat2_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('2', '3')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat2_clust), 0.05*length(mat2_clust), replace=FALSE)
+mat2 <- mat2[, inds]
+mat2_clust <- mat2_clust[inds]
+
+mat <- cbind(mat, mat2)
+mat_clust <- c(mat_clust, mat2_clust)
+
+mat <- cbind(mat, assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster == '11'])
+mat_clust <- c(mat_clust, sce_all_corrected$cluster[sce_all_corrected$cluster =='11'])
+rownames(mat) <- rowData(sce_all_corrected)[rownames(mat), 'Symbol']
+colannot <- data.frame(cluster=paste0('c', as.character(mat_clust)))
+rownames(colannot) <- colnames(mat)
+
+pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot, border_color=NA, annotation_colors=list(cluster=c(c1='red', c2='blue', c3='darkgreen', c4='orange', c11='grey')))
+
+
+## and what about the myeloid genes - is this just contaminating B cells or are they also high in myeloid markers
+
+gene_list <- rownames(sce_all_corrected)[order(marker.info.corrected$`11`$mean.logFC.cohen, decreasing=TRUE)][1:20]
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`1`, decreasing=TRUE)][1:20])
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`4`, decreasing=TRUE)][1:20])
+
+gene_list <- gene_list[!duplicated(gene_list)]
+
+library(pheatmap)
+mat <- assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster %in% c('1', '4')]
+mat_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('1', '4')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat_clust), 0.005*length(mat_clust), replace=FALSE)
+mat <- mat[, inds]
+mat_clust <- mat_clust[inds]
+
+mat2 <- assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster %in% c('2', '3')]
+mat2_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('2', '3')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat2_clust), 0.05*length(mat2_clust), replace=FALSE)
+mat2 <- mat2[, inds]
+mat2_clust <- mat2_clust[inds]
+
+mat <- cbind(mat, mat2)
+mat_clust <- c(mat_clust, mat2_clust)
+
+mat <- cbind(mat, assays(sce_all_corrected)$reconstructed[gene_list, sce_all_corrected$cluster == '11'])
+mat_clust <- c(mat_clust, sce_all_corrected$cluster[sce_all_corrected$cluster =='11'])
+rownames(mat) <- rowData(sce_all_corrected)[rownames(mat), 'Symbol']
+colannot <- data.frame(cluster=paste0('c', as.character(mat_clust)))
+rownames(colannot) <- colnames(mat)
+
+pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot, border_color=NA, annotation_colors=list(cluster=c(c1='red', c2='blue', c3='darkgreen', c4='orange', c11='grey')))
+
+
+```
+Interestingly, the doublet annotation doesn't line up with the suspected doublets here. There is a handful of cells that express decent levels of B cell markers, which is at the low end of the B cells but is comparable when only considering these genes. When we take into account the cluster-defining likely myeloid genes, the abberrant cells also express these. Thus, it is either a set of odd myeloid cells or doublets. It seems unlikely to be pure contamination.
+
+All of that said, given that the whole cluster appears to have a higher expression of B cell genes in general (much higher than myeloid clusters 1 and 4), it is difficult to choose a threshold for excluding as a putative doublet. We will leave them in for now.
+
+
+# Wrapping up
+
+Write a data file to use in a shiny app for annotation.
+
+```{r}
+# for easier visualization in app, pre-convert counts metrics to log scale
+sce_all_corrected$log2_sum_counts <- log2(sce_all_corrected$sum_counts)
+sce_all_corrected$log2_genes_detected <- log2(sce_all_corrected$genes_detected)
+saveRDS(sce_all_corrected, file='shiny_app2/data.rds')
+```
+
+Save everything
+
+```{r}
+sessionInfo()
+save(list=ls(), file='ongoing_full_clustered.RData')
+```
+

@@ -1,0 +1,291 @@
+---
+title: "DifferentialAnalysesPigBAL"
+author: "Arianne Richard"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Intro
+
+This script picks up where "clustering all.Rmd" left off.
+
+This script is for running differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female mice for each group, which we will include as a covariate. Male and female are almost completely confounded with sets of runs, so we are unable to account for both of these, and anyways it would likely be over-fitted. We will just use sex as a covariate, acknowledging that there are some sources of technical variation we aren't getting rid of, but fortunately these are not confounded with biological condition and so just add noise to the data.
+
+# Cluster filtering
+
+Based on our examinations in the clustering script, we exclude cluster 5 as low quality and cluster 17 as doublets. After consultation, we are also fairly convinced that cluster 11 is also doublets due to the co-expression of macrophage and B cell markers, so we will exclude this one as well. I am reluctant to remove any other suspected doublets because doublet detection is so fraught in a complex data set such as this one. 
+
+```{r}
+library(SingleCellExperiment)
+library(DropletUtils)
+library(scran)
+library(scater)
+library(uwot)
+library(biomaRt)
+library(scds)
+library(batchelor)
+library(bluster)
+
+load('ongoing_full_clustered.RData')
+
+
+sce_filt <- sce_all_corrected
+sce_filt <- sce_filt[,!sce_filt$cluster %in% c('5', '17', '11')]
+
+plotUMAP(sce_filt, color_by='cluster')
+
+```
+
+# Cluster annotation
+
+Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names to be used in the subsequent differential abundance testing.
+
+*to be done*
+
+```{r}
+
+## add in cluster names as sce_all_filt$named_cluster
+
+```
+
+# Differential abundance analysis
+
+This analysis will be run using a negative binomial test. As mentioned above, we will account here for sex while testing differential abundance between conditions. Run membership was actually taken into account when performing batch correction before clustering, so this is, in a way, already accounted for.
+
+We also need to account for the sorting strategy that was used. For the reason, we need to split the data into CD172a+CD16+ FSC/SSC for macrophages, CD4+, CD8b+, CD3negCD16negCD172aneg cells before looking for differential abundance within these groups. To this end, we need to split the CD4 and CD8 T cells in the 3 clusters that contained both. We will achieve this by subclustering.
+
+*to be done*
+
+```{r}
+## subcluster 14, 9? 18, 20 into 4s and 8s
+
+
+```
+
+Now we take our 23? clusters and split them according to which pool they were sorted in.
+
+*to be done*
+
+```{r}
+# abundances <- table(sce_all_filt$named_cluster, sce_all_filt$Sample)
+# abundances <- unclass(abundances) 
+# head(abundances)
+
+## split abundances into list of 4 sorted subsets and run below for each
+
+```
+
+And now we can run our differential abundance analyses.
+
+*to be done*
+
+```{r}
+
+# library(edgeR)
+# annot
+# ## reorganize as needed
+# y.ab <- DGEList(abundances, samples=annot)
+# y.ab
+# 
+# ## check that all clusters have sufficient numbers of cells across at least a couple of samples
+# ## filter as needed
+# 
+# y.ab$samples$sex <- factor(y.ab$samples$sex)
+# y.ab$samples$condition <- factor(y.ab$samples$condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'))
+# design <- model.matrix(~sex + condition, y.ab$samples)
+# 
+# y.ab <- estimateDisp(y.ab, design, trend="none")
+# summary(y.ab$common.dispersion)
+# plotBCV(y.ab, cex=1)
+# fit.ab <- glmQLFit(y.ab, design, robust=TRUE, abundance.trend=FALSE)
+# summary(fit.ab$var.prior)
+# summary(fit.ab$df.prior)
+# plotQLDisp(fit.ab, cex=1)
+# 
+# ## look at the coefficients here and pick appropriately
+# 
+# res <- glmQLFTest(fit.ab, coef='')
+# ## get the results out of the table
+
+```
+
+
+# Differential expression analysis
+
+This analysis will be run as a pseudobulk analysis, pooling counts from all of the cells within each cluster for each sample before treating like bulk RNAseq data. Differential expression will then be analysed for each cluster. For this first pass, we will run what is effectively an ANOVA for each cluster to ask whether any condition deviates from the others. 
+
+```{r}
+
+sce_all_filt <- sce_all[,colnames(sce_filt)]
+sce_all_filt$cluster <- sce_filt$cluster
+
+summed <- aggregateAcrossCells(sce_all_filt, 
+    id=colData(sce_all_filt)[,c("cluster", "Sample")])
+
+library(edgeR)
+library(scran)
+
+summed.filt <- summed[,summed$ncells >= 10]
+
+y <- DGEList(counts=counts(summed.filt), samples=colData(summed.filt))
+y <- calcNormFactors(y)
+y$samples$condition <- factor(y$samples$condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'))
+
+de.results.any <- pseudoBulkDGE(summed.filt, 
+    label=summed.filt$cluster,
+    design=~sex + factor(condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')),
+    coef=3:5,
+    condition=summed.filt$condition
+)
+## note that this has messed with the cluster order, effectively alphabetizing the clusters
+
+## post-hoc look at fits and differences
+for(i in 1:length(de.results.any)){
+  plotBCV(metadata(de.results.any[[i]])$y, main=names(de.results.any)[i])
+  plotQLDisp(metadata(de.results.any[[i]])$fit, main=names(de.results.any)[i])
+  plotMDS(metadata(de.results.any[[i]])$y, 
+          labels=metadata(de.results.any[[i]])$y$samples$sex, 
+          col=c('black', 'blue', 'turquoise', 'red')[as.numeric(factor(metadata(de.results.any[[i]])$y$samples$condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')))], 
+          main=names(de.results.any)[i])
+}
+
+for(i in 1:length(de.results.any)){
+  de.results.any[[i]]$symbol <- rowData(sce_all_filt)[rownames(de.results.any[[i]]), 'Symbol']
+  colnames(de.results.any[[i]])[1:3] <- c('logFC_Ad.HA.NP', 'logFC_Ad.HA.NP.Ad.IL1b', 'logFC_pH1N1')
+  write.table(de.results.any[[i]], 
+              file=paste0('Jan2023analysis/DE_all_cluster_', names(de.results.any)[i], '.txt'), 
+              sep='\t', quote=FALSE)
+}
+lapply(de.results.any, function(x){head(x[order(x$PValue),])})
+
+#look at clusters that were skipped
+metadata(de.results.any)$failed
+```
+Sex (and perhaps confounded run set) really dominate the variance here. There aren't big shifts by condition but there are a handful of genes in most clusters that significantly vary in one or more conditions. Also clusters 19 and 20 failed due to not having enough cells in each sample/cluster split. These may come up in differential abundance testing and are possibly very interesting for that reason.
+
+We would now like to formally test each condition against PBS and generate a list of genes significant in each of these. Our formal analysis will ultimately improve on this one-by-one approach, but it's a good place to see where we are at with the data for discussion.
+
+```{r}
+de.results.AdHANP <- pseudoBulkDGE(summed.filt, 
+    label=summed.filt$cluster,
+    design=~sex + factor(condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')),
+    coef=3,
+    condition=summed.filt$condition
+)
+
+
+for(i in 1:length(de.results.AdHANP)){
+  de.results.AdHANP[[i]]$symbol <- rowData(sce_all_filt)[rownames(de.results.AdHANP[[i]]), 'Symbol']
+  write.table(de.results.AdHANP[[i]], 
+              file=paste0('Jan2023analysis/DE_AdHANP_cluster_', names(de.results.AdHANP)[i], '.txt'), 
+              sep='\t', quote=FALSE)
+}
+lapply(de.results.AdHANP, function(x){head(x[order(x$PValue),])})
+
+
+de.results.AdHANPAdIL1b <- pseudoBulkDGE(summed.filt, 
+    label=summed.filt$cluster,
+    design=~sex + factor(condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')),
+    coef=4,
+    condition=summed.filt$condition
+)
+
+for(i in 1:length(de.results.AdHANPAdIL1b)){
+  de.results.AdHANPAdIL1b[[i]]$symbol <- rowData(sce_all_filt)[rownames(de.results.AdHANPAdIL1b[[i]]), 'Symbol']
+  write.table(de.results.AdHANPAdIL1b[[i]], 
+              file=paste0('Jan2023analysis/DE_AdHANPAdIL1b_cluster_',
+                          names(de.results.AdHANPAdIL1b)[i], '.txt'), 
+              sep='\t', quote=FALSE)
+}
+lapply(de.results.AdHANPAdIL1b, function(x){head(x[order(x$PValue),])})
+
+
+de.results.pH1N1 <- pseudoBulkDGE(summed.filt, 
+    label=summed.filt$cluster,
+    design=~sex + factor(condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')),
+    coef=5,
+    condition=summed.filt$condition
+)
+
+for(i in 1:length(de.results.pH1N1)){
+  de.results.pH1N1[[i]]$symbol <- rowData(sce_all_filt)[rownames(de.results.pH1N1[[i]]), 'Symbol']
+  write.table(de.results.pH1N1[[i]], 
+              file=paste0('Jan2023analysis/DE_pH1N1_cluster_', names(de.results.pH1N1)[i], '.txt'), 
+              sep='\t', quote=FALSE)
+}
+lapply(de.results.pH1N1, function(x){head(x[order(x$PValue),])})
+
+
+
+
+
+```
+
+Finally, it will be interesting to examine specifically the impact of adding IL1b to the immunization. 
+
+```{r}
+de.results.IL1b <- pseudoBulkDGE(summed.filt, 
+    label=summed.filt$cluster,
+    design=~sex + factor(condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1')),
+    contrast=c(0,0,-1,1,0),
+    condition=summed.filt$condition
+)
+
+for(i in 1:length(de.results.IL1b)){
+  de.results.IL1b[[i]]$symbol <- rowData(sce_all_filt)[rownames(de.results.IL1b[[i]]), 'Symbol']
+  write.table(de.results.IL1b[[i]], 
+              file=paste0('Jan2023analysis/DE_IL1b_cluster_', names(de.results.IL1b)[i], '.txt'), 
+              sep='\t', quote=FALSE)
+}
+lapply(de.results.IL1b, function(x){head(x[order(x$PValue),])})
+
+
+
+```
+
+Follow-up will involve making e.g. heatmaps or plots of specific genes, perhaps easiest after discussion. A few quick figures are depicted below for sanity checking.
+
+*to be done*
+
+```{r}
+IFI6 <- 'ENSSSCG00000034570'
+CCL5 <- 'ENSSSCG00000017705'
+
+plot_resid <- function(y, clust, regress_out, split_by, gene, ...){
+  
+  loggene <- cpm(y, log=TRUE)[gene,y$samples$cluster==clust]
+  mod <- lm(loggene~y$samples[y$samples$cluster==clust, regress_out])
+  res <- resid(mod)
+  boxplot(res~y$samples[y$samples$cluster==clust,split_by], xlab='', ylab=gene, ...)
+  stripchart(res~y$samples[y$samples$cluster==clust,split_by], 
+             method = "jitter", pch=20, vertical=TRUE, add=TRUE)
+}
+
+
+for(i in 1:length(de.results.any)){
+  plot_resid(y, clust=names(de.results.any)[i], regress_out='sex', split_by='condition', IFI6, 
+             main=paste('Cluster', names(de.results.any)[i]))
+}
+
+for(i in 1:length(de.results.any)){
+  plot_resid(y, clust=names(de.results.any)[i], regress_out='sex', split_by='condition', CCL5, 
+             main=paste('Cluster', names(de.results.any)[i]))
+}
+
+```
+
+# Wrapping up
+
+Save everything
+
+```{r}
+sessionInfo()
+save(list=ls(), file='ongoing_full.RData')
+```
+
+
+
