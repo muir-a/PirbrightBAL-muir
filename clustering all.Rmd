@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This script picks up where "processing all.Rmd" left off.
 
-We will load the data, cluster, subcluster, remove doublet clusters, make direct cluster comparisons, etc, in order to come up with the best dataset for annotation.
+We will load the data, cluster, remove doublet clusters, make direct cluster comparisons, etc, in order to come up with the best dataset for annotation.
 
 # Clustering
 
@@ -42,7 +42,6 @@ We'll use the graph-based clustering implemented in bluster, specifically using 
 ```{r}
 library(bluster)
 
-# parameters were carefully chose
 set.seed(200)
 sce_all_corrected_clust <- clusterCells(sce_all_corrected,
                                         use.dimred="corrected",
