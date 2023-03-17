@@ -72,7 +72,7 @@ for(i in 1:length(marker.info.corrected)){
   ord <- marker.info.corrected[[i]][order(marker.info.corrected[[i]]$mean.logFC.cohen, decreasing=TRUE),]
   ord$symbol <- rowData(sce_all)[rownames(ord), 'Symbol']
   write.table(ord, 
-              paste0('Jan2023analysis/cluster', as.character(i), 'markers.txt'), 
+              paste0('March2023analysis/cluster', names(marker.info.corrected)[i], 'markers.txt'), 
               quote=F)
 }
 
@@ -115,7 +115,7 @@ ggplot(pure.data, aes(x=cluster, y=purity, colour=maximum)) +
 table(Cluster=sce_all_corrected$cluster, pure.data$maximum)
 ```
 
-Here it looks like the lowest purity is in clusters 1, 4, 6, and 7. 17 is somewhat unpure, which may have contributed to the silhouette width results, while cluster 5 looks extremely pure, suggesting its issue is more likely inter-cluster heterogeneity.
+Here it looks like the lowest purity is in clusters 1, 4, 6, and 7. 17 is somewhat unpure, which may have contributed to the silhouette width results, while cluster 5 looks extremely pure, suggesting its issue is more likely intra-cluster heterogeneity.
 
 And finally we'll look at the heterogeneity within each cluster by computing the within cluster sum of squares.
 
@@ -195,6 +195,8 @@ This looks fine. On these grounds we should likely exclude cluster 17 as doublet
 The last thing to think about is cluster 11, which has a large percentage of suspected doublets and did exhibit a strange mix of B cell and myeloid markers. Let's look at these cells individually to see if there is a subset of co-expressors that could be some sort of doublets.
 
 ```{r}
+## for sanity checking as we go, we'll also look at pre-merge sce_all expression
+sce_all$cluster <- sce_all_corrected$cluster
 
 plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by="batch", point_size=1, by_exprs_values='reconstructed')
 plotUMAP(sce_all_corrected[,sce_all_corrected$cluster=='11'], colour_by="query_doublet", point_size=1, by_exprs_values='reconstructed')
@@ -296,9 +298,339 @@ pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot
 
 
 ```
-Interestingly, the doublet annotation doesn't line up with the suspected doublets here. There is a handful of cells that express decent levels of B cell markers, which is at the low end of the B cells but is comparable when only considering these genes. When we take into account the cluster-defining likely myeloid genes, the abberrant cells also express these. Thus, it is either a set of odd myeloid cells or doublets. It seems unlikely to be pure contamination.
+Repeating this using logcounts because the reconstructed data can have odd interpolated values.
 
-All of that said, given that the whole cluster appears to have a higher expression of B cell genes in general (much higher than myeloid clusters 1 and 4), it is difficult to choose a threshold for excluding as a putative doublet. We will leave them in for now.
+```{r}
+# note sce_all and sce_all_corrected have the same columns
+
+gene_list <- rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`1`, decreasing=TRUE)][1:20]
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`4`, decreasing=TRUE)][1:20])
+
+gene_list <- gene_list[!duplicated(gene_list)]
+
+library(pheatmap)
+mat <- exprs(sce_all)[gene_list, sce_all_corrected$cluster == '11']
+mat_doub <- sce_all_corrected$query_doublet[sce_all_corrected$cluster =='11']
+rownames(mat) <- rowData(sce_all_corrected)[rownames(mat), 'Symbol']
+colannot <- data.frame(doublet=factor(mat_doub))
+rownames(colannot) <- colnames(mat)
+
+pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot)
+
+
+
+gene_list <- rownames(sce_all_corrected)[order(marker.info.corrected$`11`$mean.logFC.cohen, decreasing=TRUE)][1:20]
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`1`, decreasing=TRUE)][1:20])
+gene_list <- c(gene_list, rownames(sce_all_corrected)[order(marker.info.corrected$`11`$full.logFC.cohen$`4`, decreasing=TRUE)][1:20])
+
+gene_list <- gene_list[!duplicated(gene_list)]
+
+mat <- exprs(sce_all)[gene_list, sce_all_corrected$cluster %in% c('1', '4')]
+mat_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('1', '4')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat_clust), 0.005*length(mat_clust), replace=FALSE)
+mat <- mat[, inds]
+mat_clust <- mat_clust[inds]
+
+mat2 <- exprs(sce_all)[gene_list, sce_all_corrected$cluster %in% c('2', '3')]
+mat2_clust <- sce_all_corrected$cluster[sce_all_corrected$cluster %in% c('2', '3')]
+## downsample 
+set.seed(100)
+inds <- sample.int(length(mat2_clust), 0.05*length(mat2_clust), replace=FALSE)
+mat2 <- mat2[, inds]
+mat2_clust <- mat2_clust[inds]
+
+mat <- cbind(mat, mat2)
+mat_clust <- c(mat_clust, mat2_clust)
+
+mat <- cbind(mat, exprs(sce_all)[gene_list, sce_all_corrected$cluster == '11'])
+mat_clust <- c(mat_clust, sce_all_corrected$cluster[sce_all_corrected$cluster =='11'])
+rownames(mat) <- rowData(sce_all_corrected)[rownames(mat), 'Symbol']
+colannot <- data.frame(cluster=paste0('c', as.character(mat_clust)))
+rownames(colannot) <- colnames(mat)
+
+pheatmap(mat, show_colnames=FALSE, cex=0.8, scale='row', annotation_col=colannot, border_color=NA, annotation_colors=list(cluster=c(c1='red', c2='blue', c3='darkgreen', c4='orange', c11='grey')))
+
+fewgenes <- rownames(sce_all_corrected)[rowData(sce_all_corrected)$Symbol %in% c('CD163', 'JCHAIN')]
+plotExpression(sce_all, features=fewgenes, x='cluster')
+plotExpression(sce_all, features=fewgenes, x='cluster', exprs_values='counts')
+
+```
+
+Interestingly, the doublet annotation doesn't line up with the suspected doublets here. There are a handful of cells expressing a number of B cell markers and all of the cells express a pretty high level of JCHAIN. When we take into account the cluster-defining likely myeloid genes, the cells also exhibit robust expression of these (e.g. CD163). Thus, it is either a set of odd cells or doublets. It seems unlikely to be pure cluster contamination.
+
+Based on this and discussion among ourselves, we have decided to define this cluster as doublets.
+
+
+## Subclustering
+
+Upon closer inspection and attempted annotation, we discovered that there are a couple of clusters that might benefit from subclustering. Specifically, clusters 14, 18 and 20 are composed of a mixture of CD4 and CD8 T cells, and to run differential abundance analyses according to sorted cell types we'll need to separate these. In addition, cluster 9 appeared to be a heterogeneous mixture of cells expression CD3 (T cells) and cells not expressing CD3, suggesting that it may benefit from subclustering.
+
+In order to run subclustering, we start by subsetting cells in the cluster of interest. In an ideal world, CD4 and CD8 T cell-associated genes would dominate the highly variable genes and enable unsupervised sub-clustering to separate the cell types. Unfortunately, this is often not the case. We therefore need to supervise the clustering. To this end, we pull out CD4 and CD8B genes that encode the markers used for sorting and use a zero-inflated Kendall's Tau correlation metric implemented in SCHOT to identify the top genes among the highly variable genes correlated with these markers. We then use this filtered list for subclustering.
+
+We'll start with cluster 14.
+
+```{r}
+
+c14 <- sce_all_corrected$cluster == '14'
+
+CD4 <- counts(sce_all)['ENSSSCG00000000687',c14]
+CD8 <- counts(sce_all)['ENSSSCG00000008213',c14]
+
+library(scHOT)
+varmod14 <- modelGeneVar(sce_all[,c14], block=sce_all[,c14]$run)
+vargenes14 <- getTopHVGs(varmod14, n=1000)
+
+CD4corr <- vector('numeric', length(vargenes14))
+CD8corr <- CD4corr
+for(i in 1:length(vargenes14)){
+  CD4corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000000687', c14],
+                               exprs(sce_all)[vargenes14[i], c14]
+  )
+  CD8corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000008213', c14],
+                               exprs(sce_all)[vargenes14[i], c14]
+  )
+}
+
+top <- vargenes14[c(which(CD4corr > 0.07),which(CD8corr > 0.07))]
+top <- c(top, 'ENSSSCG00000000687', 'ENSSSCG00000008213')
+top <- top[!duplicated(top)]
+
+set.seed(100)
+sce_all_14 <- fastMNN(sce_all[,c14], batch=sce_all[,c14]$run, subset.row = top, get.variance = TRUE, k=10)
+
+set.seed(200)
+sce_all_14_clust <- clusterCells(sce_all_14,
+                                        use.dimred="corrected",
+                                        BLUSPARAM=SNNGraphParam(k=10, 
+                                                                type="jaccard",
+                                                                cluster.fun="fast_greedy"))
+
+table(sce_all_14_clust)
+sce_all_14$cluster <- sce_all_14_clust
+clust14 <- rep(0, times=ncol(sce_all_corrected))
+clust14[c14] <- sce_all_14_clust
+
+CD4CD8 <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD4', 'CD8B')]
+plotExpression(sce_all_14, features=CD4CD8, x='cluster', exprs_values='reconstructed')
+
+premerge14 <- sce_all[,c14]
+premerge14$cluster <- sce_all_14_clust
+plotExpression(premerge14, features=CD4CD8, x='cluster')
+
+```
+
+Unfortunately, cluster 14 does not subcluster well, even in a supervised manner, into  CD4+ and CD8+ groups. We've tried several different mixtures of parameters and it just doesn't split. In fact, expression of CD4 and CD8 is more of a continuum in this cluster instead of bimodal as well. 
+
+Let's eyeball whether there are different proportions of cells in this cluster by condition.
+
+```{r}
+
+props <- prop.table(table(sce_all_corrected$cluster, sce_all_corrected$Sample), margin=2)['14',]
+proptab <- annot[,c('sample', 'Condition', 'Sex')]
+proptab$props <- props[rownames(proptab)]
+
+ggplot(data=proptab, aes(x=Condition, y=props)) +
+  geom_boxplot() +
+  geom_point(aes(col=Sex), position='jitter')
+
+
+```
+
+So this doesn't appear to be associated with condition. (Two of the pH1N1 values are very low, but one is high, and they are not segregated by sex.)  We may need to just leave this cluster out of our DA analysis groupings.
+
+Next we do Cluster 18.
+
+```{r}
+
+c18 <- sce_all_corrected$cluster == '18'
+
+CD4 <- counts(sce_all)['ENSSSCG00000000687',c18]
+CD8 <- counts(sce_all)['ENSSSCG00000008213',c18]
+
+
+library(scHOT)
+varmod18 <- modelGeneVar(sce_all[,c18], block=sce_all[,c18]$run)
+vargenes18 <- getTopHVGs(varmod18, n=1000)
+
+CD4corr <- vector('numeric', length(vargenes18))
+CD8corr <- CD4corr
+for(i in 1:length(vargenes18)){
+  CD4corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000000687', c18],
+                               exprs(sce_all)[vargenes18[i], c18]
+  )
+  CD8corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000008213', c18],
+                               exprs(sce_all)[vargenes18[i], c18]
+  )
+}
+
+top <- vargenes18[c(which(CD4corr > 0.1),which(CD8corr > 0.1))]
+top <- c(top, 'ENSSSCG00000000687', 'ENSSSCG00000008213')
+top <- top[!duplicated(top)]
+
+set.seed(100)
+sce_all_18 <- fastMNN(sce_all[,c18], batch=sce_all[,c18]$run, subset.row = top, get.variance = TRUE)
+
+set.seed(200)
+sce_all_18_clust <- clusterCells(sce_all_18,
+                                        use.dimred="corrected",
+                                        BLUSPARAM=SNNGraphParam(k=20, 
+                                                                type="jaccard",
+                                                                cluster.fun="fast_greedy"))
+
+table(sce_all_18_clust)
+sce_all_18$cluster <- sce_all_18_clust
+clust18 <- rep(0, times=ncol(sce_all_corrected))
+clust18[c18] <- sce_all_18_clust
+
+CD4CD8 <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD4', 'CD8B')]
+plotExpression(sce_all_18, features=CD4CD8, x='cluster', exprs_values='reconstructed')
+
+premerge18 <- sce_all[,c18]
+premerge18$cluster <- sce_all_18_clust
+plotExpression(premerge18, features=CD4CD8, x='cluster')
+
+```
+
+This subclusters nicely. So let's change cluster 18 labels to 18a and 18b to reflect the subsetting. 
+
+```{r}
+sce_all_18_clust <- as.character(sce_all_18_clust)
+sce_all_18_clust[sce_all_18_clust == '1'] <- '18a'
+sce_all_18_clust[sce_all_18_clust == '2'] <- '18b'
+cs <- as.character(sce_all_corrected$cluster)
+cs[c18] <- sce_all_18_clust
+sce_all_corrected$cluster <- cs
+```
+
+And cluster 20. Note that here we reduce the k nearest neighbours examined because the number of cells is so low.
+
+```{r}
+
+c20 <- sce_all_corrected$cluster == '20'
+
+CD4 <- counts(sce_all)['ENSSSCG00000000687',c20]
+CD8 <- counts(sce_all)['ENSSSCG00000008213',c20]
+
+
+library(scHOT)
+varmod20 <- modelGeneVar(sce_all[,c20], block=sce_all[,c20]$run)
+vargenes20 <- getTopHVGs(varmod20, n=1000)
+
+CD4corr <- vector('numeric', length(vargenes20))
+CD8corr <- CD4corr
+for(i in 1:length(vargenes20)){
+  CD4corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000000687', c20],
+                               exprs(sce_all)[vargenes20[i], c20]
+  )
+  CD8corr[i] <- weightedZIKendall(exprs(sce_all)['ENSSSCG00000008213', c20],
+                               exprs(sce_all)[vargenes20[i], c20]
+  )
+}
+
+top <- vargenes20[c(which(CD4corr > 0.10),which(CD8corr > 0.10))]
+top <- c(top, 'ENSSSCG00000000687', 'ENSSSCG00000008213')
+top <- top[!duplicated(top)]
+
+set.seed(100)
+sce_all_20 <- fastMNN(sce_all[,c20], batch=sce_all[,c20]$run, subset.row = top, get.variance = TRUE, k=9)
+
+set.seed(200)
+sce_all_20_clust <- clusterCells(sce_all_20,
+                                        use.dimred="corrected",
+                                        BLUSPARAM=SNNGraphParam(k=9, 
+                                                                type="jaccard",
+                                                                cluster.fun="fast_greedy"))
+
+table(sce_all_20_clust)
+sce_all_20$cluster <- sce_all_20_clust
+clust20 <- rep(0, times=ncol(sce_all_corrected))
+clust20[c20] <- sce_all_20_clust
+
+CD4CD8 <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD4', 'CD8B')]
+plotExpression(sce_all_20, features=CD4CD8, x='cluster', exprs_values='reconstructed')
+
+premerge20 <- sce_all[,c20]
+premerge20$cluster <- sce_all_20_clust
+plotExpression(premerge20, features=CD4CD8, x='cluster')
+```
+
+This clustering did a decent job except for 3 rogue cells that appear to be in the wrong cluster. They must have some similarities to the others. We'll go with this subclustering and change the labels to 20a and 20b.
+
+```{r}
+
+sce_all_20_clust <- as.character(sce_all_20_clust)
+sce_all_20_clust[sce_all_20_clust == '1'] <- '20a'
+sce_all_20_clust[sce_all_20_clust == '2'] <- '20b'
+cs <- as.character(sce_all_corrected$cluster)
+cs[c20] <- sce_all_20_clust
+sce_all_corrected$cluster <- cs
+
+```
+
+Finally we would like to subcluster cluster 9 as it looked as though this was made of 2 mutually exclusive cell types, one expressing CD3E/CD8A and the other with more KLRB1 and RORC. Here we will just be guided by the data and go for an unsupervised split to see what we get.
+
+```{r}
+c9 <- sce_all_corrected$cluster == '9'
+varmod9 <- modelGeneVar(sce_all[,c9], block=sce_all[,c9]$run)
+vargenes9 <- getTopHVGs(varmod9, n=2000)
+
+set.seed(100)
+sce_all_9 <- fastMNN(sce_all[,c9], batch=sce_all[,c9]$run, subset.row = vargenes9, get.variance = TRUE)
+
+set.seed(200)
+sce_all_9_clust <- clusterCells(sce_all_9,
+                                        use.dimred="corrected",
+                                        BLUSPARAM=SNNGraphParam(k=20, 
+                                                                type="jaccard",
+                                                                cluster.fun="fast_greedy"))
+
+table(sce_all_9_clust)
+sce_all_9$cluster <- sce_all_9_clust
+clust9 <- rep(0, times=ncol(sce_all_corrected))
+clust9[c9] <- sce_all_9_clust
+
+genes <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD8A', 'RORC', 'CD3E', 'KLRB1', 'CD8B')]
+# note CD4 was not in the list of HVGs
+plotExpression(sce_all_9, features=genes, x='cluster', exprs_values='reconstructed')
+
+
+```
+
+This yields 3 subclusters, one which appears to be mainly CD3E/CD8A+, one which appears to have high KLRB1 and RORC, and the other which is intermediate and likely marked by other genes. We'll go with this level of unsupervised subclustering so that we can extract the T cells and will have to think about the identities of the other subclusters later as well. 
+
+```{r}
+
+sce_all_9_clust <- as.character(sce_all_9_clust)
+sce_all_9_clust[sce_all_9_clust == '1'] <- '9a'
+sce_all_9_clust[sce_all_9_clust == '2'] <- '9b'
+sce_all_9_clust[sce_all_9_clust == '3'] <- '9c'
+cs <- as.character(sce_all_corrected$cluster)
+cs[c9] <- sce_all_9_clust
+sce_all_corrected$cluster <- cs
+
+```
+
+Finally, we need to re-run our marker scoring because we have added some clusters. For this, we will only write to file the scores for the clusters we have added.
+
+```{r}
+marker.info.corrected <- scoreMarkers(sce_all_corrected, 
+                                      groups=sce_all_corrected$cluster,
+                                      assay.type='reconstructed',
+                                      full.stats=TRUE)
+
+for(i in 1:length(marker.info.corrected)){
+  if(names(marker.info.corrected)[i] %in% c('18a', '18b', '20a', '20b', '9a', '9b', '9c')){
+    ord <- marker.info.corrected[[i]][order(marker.info.corrected[[i]]$mean.logFC.cohen, decreasing=TRUE),]
+    ord$symbol <- rowData(sce_all)[rownames(ord), 'Symbol']
+    write.table(ord, 
+                paste0('March2023analysis/cluster', names(marker.info.corrected)[i], 'markers.txt'), 
+                quote=F)
+  }
+}
+
+```
 
 
 # Wrapping up
@@ -309,7 +641,7 @@ Write a data file to use in a shiny app for annotation.
 # for easier visualization in app, pre-convert counts metrics to log scale
 sce_all_corrected$log2_sum_counts <- log2(sce_all_corrected$sum_counts)
 sce_all_corrected$log2_genes_detected <- log2(sce_all_corrected$genes_detected)
-saveRDS(sce_all_corrected, file='shiny_app2/data.rds')
+saveRDS(sce_all_corrected, file='shiny_app/data.rds')
 ```
 
 Save everything
