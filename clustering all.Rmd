@@ -632,6 +632,31 @@ for(i in 1:length(marker.info.corrected)){
 
 ```
 
+And we make some plots now that we have all of the clusters.
+
+
+```{r}
+dat <- as.data.frame(table(sce_all_corrected$cluster, sce_all_corrected$Sample))
+colnames(dat) <- c('cluster', 'sample', 'n_cells')
+
+ggplot(dat, aes(fill=sample, y=n_cells, x=cluster)) +
+  geom_bar(position='stack', stat='identity')
+
+pdf('March2023analysis/cluster_occupancy.pdf')
+ggplot(dat, aes(fill=sample, y=n_cells, x=cluster)) +
+  geom_bar(position='stack', stat='identity')
+dev.off()
+
+plotUMAP(sce_all_corrected, colour_by='cluster', point_size=0.3)
+
+pdf('March2023analysis/UMAP_clusters.pdf')
+plotUMAP(sce_all_corrected, colour_by='cluster', point_size=0.3)
+dev.off()
+
+png('March2023analysis/UMAP_clusters.png')
+plotUMAP(sce_all_corrected, colour_by='cluster', point_size=0.3)
+dev.off()
+```
 
 # Wrapping up
 
