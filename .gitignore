@@ -5,8 +5,14 @@
 # Session Data files
 .RData
 
+# RStudio files
+.Rproj
+
 # User-specific files
 .Ruserdata
+
+# R temporary files
+.RDataTmp
 
 # Example code in package build process
 *-Ex.R
