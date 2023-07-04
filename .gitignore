@@ -5,6 +5,9 @@
 # Session Data files
 .RData
 
+# RStudio files
+.Rproj
+
 # User-specific files
 .Ruserdata
 
