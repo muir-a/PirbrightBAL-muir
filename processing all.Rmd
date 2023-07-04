@@ -124,7 +124,7 @@ for(i in 1:length(brs)){
   # returning only unique for plotting speed
   uniq <- !duplicated(brs[[i]]$rank)
   plot(brs[[i]]$rank[uniq], brs[[i]]$total[uniq], log="xy",
-       xlab="Rank", ylab="Total UMI count", cex.lab=1.2)
+       xlab="Rank", ylab="Total UMI count", main=unique(sce_list[[i]]$Sample), cex.lab=1.2)
   abline(h=metadata(brs[[i]])$inflection, col="darkgreen", lty=2)
   abline(h=metadata(brs[[i]])$knee, col="dodgerblue", lty=2)
   legend("bottomleft", legend=c("Inflection", "Knee"), 
@@ -151,7 +151,7 @@ for(i in 1:length(sce_list)){
   limit <- 100   ## set at 100 because this is the default for emptyDrops used above
   all.out <- emptyDrops(counts(sce_list[[i]]), lower=limit, test.ambient=TRUE)
   hist(all.out$PValue[all.out$Total <= limit & all.out$Total > 0],
-       xlab="P-value", main="", col="grey80") 
+       xlab="P-value", main=unique(sce_list[[i]]$Sample), col="grey80") 
 }
 
 ```
@@ -248,7 +248,7 @@ Here we will look for outlying cells in terms of detected gene number and log-ra
 In order to look at specific types of genes, we need to annotate the dataset. To make this easier, we'll first remove genes with no counts in any dataset.
 
 ```{r}
-
+# Remove genes with zero counts
 detected <- lapply(sce_list, function(x){rowSums(counts(x)) > 0})
 names(detected) <- paste0('Sample', as.character(c(1:12)))
 detected <- data.frame(detected)
@@ -257,7 +257,7 @@ sce_list <- lapply(sce_list, function(x) {
   return(x[-undetected,])
 })
 rm(detected, undetected)
-
+# Annotate the remaining non-zero genes
 library(biomaRt)
 ensembl <- useEnsembl(biomart = "genes", dataset = "sscrofa_gene_ensembl")
 
@@ -275,10 +275,10 @@ sce_list <- lapply(sce_list, function(x){
   rowData(x)$end <- map[rownames(x), 'end_position']
   return(x)
 })
-
+# Identify and plot incidence of mitochondrial genes
 length(which(rowData(sce_list[[1]])$chr == 'MT'))
 rowSums(counts(sce_list[[1]])[which(rowData(sce_list[[1]])$chr == 'MT'),])
-hist(colSums(counts(sce_list[[1]])[which(rowData(sce_list[[1]])$chr == 'MT'),]), breaks=40)
+hist(colSums(counts(sce_list[[1]])[which(rowData(sce_list[[1]])$chr == 'MT'),]), main='Mitochondrial UMI counts', xlab='UMI counts of mitochondrial transcripts per cell', ylab= 'Number of cells', breaks=40)
 
 ```
 
@@ -298,10 +298,10 @@ sce_list <- lapply(sce_list, function(x){
 }) 
 
 lapply(sce_list, function(x){
-  hist(log10(x$sum_counts), xlab='log total counts')
-  hist(x$genes_detected, xlab='genes detected')
-  plot(log10(x$sum_mito), log10(x$sum_counts - x$sum_mito), xlab='log mito counts', ylab='log non-mito counts')
-  hist(x$mito_ratio, xlab='log mito:non mito count ratio')
+  hist(log10(x$sum_counts), main=paste0(unique(x$Sample),', total reads per cell'), xlab='log total counts')
+  hist(x$genes_detected, main=paste0(unique(x$Sample),', total genes detected per cell'), xlab='genes detected')
+  plot(log10(x$sum_mito), log10(x$sum_counts - x$sum_mito), main=paste0(unique(x$Sample),', mitochondrial reads versus non-mitochondrial reads'), xlab='log mitochondrial counts', ylab='log non-mitochondrial counts')
+  hist(x$mito_ratio, main=paste0(unique(x$Sample),', ratio of mitochondrial reads to non-mitochondrial reads'), xlab='log mito:non mito count ratio')
 })
 
 ```
@@ -328,25 +328,25 @@ Let's have a look at samples 1, 3 and 7 and check QC parameters and marker genes
 ```{r}
 
 x <- sce_list[[1]]
-plotReducedDim(x, 'UMAP', colour_by='genes_detected')
-plotReducedDim(x, 'UMAP', colour_by='mito_ratio')
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) ## myeloid
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) ## T cells
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) ## B cells
+plotReducedDim(x, 'UMAP', colour_by='genes_detected') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by='mito_ratio') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) + ggtitle(paste0(unique(x$Sample), ', highlighting myeloid cells')) ## myeloid
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) + ggtitle(paste0(unique(x$Sample), ', highlighting T cells')) ## T cells
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) + ggtitle(paste0(unique(x$Sample), ', highlighting B cells')) ## B cells
 
 x <- sce_list[[3]]
-plotReducedDim(x, 'UMAP', colour_by='genes_detected')
-plotReducedDim(x, 'UMAP', colour_by='mito_ratio')
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) ## myeloid
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) ## T cells
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) ## B cells
+plotReducedDim(x, 'UMAP', colour_by='genes_detected') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by='mito_ratio') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) + ggtitle(paste0(unique(x$Sample), ', highlighting myeloid cells')) ## myeloid
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) + ggtitle(paste0(unique(x$Sample), ', highlighting T cells')) ## T cells
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) + ggtitle(paste0(unique(x$Sample), ', highlighting B cells')) ## B cells
 
 x <- sce_list[[7]]
-plotReducedDim(x, 'UMAP', colour_by='genes_detected')
-plotReducedDim(x, 'UMAP', colour_by='mito_ratio')
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) ## myeloid
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) ## T cells
-plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) ## B cells
+plotReducedDim(x, 'UMAP', colour_by='genes_detected') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by='mito_ratio') + ggtitle(unique(x$Sample))
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'HNMT')]) + ggtitle(paste0(unique(x$Sample), ', highlighting myeloid cells')) ## myeloid
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'CD3E')]) + ggtitle(paste0(unique(x$Sample), ', highlighting T cells')) ## T cells
+plotReducedDim(x, 'UMAP', colour_by=rownames(sce_list[[1]])[which(rowData(sce_list[[1]])$Symbol == 'PAX5')]) + ggtitle(paste0(unique(x$Sample), ', highlighting B cells')) ## B cells
 
 ```
 
@@ -356,7 +356,7 @@ Sample 3 remains tricky as there is a population of cells with myeloid markers t
 
 So now we filter out cells with outlying mitochondrial ratios within each dataset.
 
-```{r}
+```{r, fig.width=10, fig.height=6} 
 
 for(i in 1:length(sce_list)){
   sce_list[[i]]$outlier <- isOutlier(sce_list[[i]]$mito_ratio, type='both')
@@ -364,7 +364,7 @@ for(i in 1:length(sce_list)){
   cols <- rep('black', nrow(sce_list[[i]]))
   cols[sce_list[[i]]$outlier] <- 'red'
   plot(log10(sce_list[[i]]$sum_mito), log10(sce_list[[i]]$sum_counts - sce_list[[i]]$sum_mito), 
-       col=cols, xlab='log mito counts', ylab='log non-mito counts') 
+       col=cols, main=paste0(unique(sce_list[[i]]$Sample), ', highlighting cells with outlying mito to non-mito ratios'), xlab='log mito counts', ylab='log non-mito counts')
   plotReducedDim(sce_list[[i]], 'UMAP', colour_by='outlier')
   sce_list[[i]] <- sce_list[[i]][,!sce_list[[i]]$outlier]
 }
@@ -445,7 +445,8 @@ Whether or not sample should be specified in the design for determining biologic
 varmod <- modelGeneVar(sce_all, block=sce_all$run)
 
 for(i in 1:length(levels(sce_all$run))){
-  plot(metadata(varmod$per.block[[i]])$mean, metadata(varmod$per.block[[i]])$var, 
+  plot(metadata(varmod$per.block[[i]])$mean, metadata(varmod$per.block[[i]])$var,
+       main=levels(sce_all$run)[i],
        xlab="Mean of log-expression", 
        ylab="Variance of log-expression")
   curve(metadata(varmod$per.block[[i]])$trend(x), col='dodgerblue', add=TRUE, lwd=2)
@@ -474,14 +475,14 @@ col_list <- c(sample1='#A6CEE3', sample2='#1F78B4',
 set.seed(100)
 ord <- sample.int(ncol(sce_all), ncol(sce_all), replace=FALSE)
 pl <- plotUMAP(sce_all[,ord], colour_by="Sample")
-pl + scale_colour_manual(values=col_list)
-plotUMAP(sce_all[,ord], colour_by="condition")
-plotUMAP(sce_all[,ord], colour_by="sex")
+pl + scale_colour_manual(values=col_list) + ggtitle('UMAP using HVGs, uncorrected')
+plotUMAP(sce_all[,ord], colour_by="condition") + ggtitle('UMAP using HVGs, uncorrected')
+plotUMAP(sce_all[,ord], colour_by="sex") + ggtitle('UMAP using HVGs, uncorrected')
 
 
-plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'HNMT')]) ## myeloid
-plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'CD3E')]) ## T cells
-plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'PAX5')]) ## B cells
+plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'HNMT')]) + ggtitle('UMAP using HVGs, myeloid highlighted (HMNT), uncorrected') ## myeloid
+plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'CD3E')]) + ggtitle('UMAP using HVGs, T cells highlighted (CD3E), uncorrected') ## T cells
+plotReducedDim(sce_all, 'UMAP', colour_by=rownames(sce_all)[which(rowData(sce_all)$Symbol == 'PAX5')]) + ggtitle('UMAP using HVGs, B cells highlighted (PAX5), uncorrected') ## B cells
 
 
 ```
@@ -517,13 +518,13 @@ sce_all_corrected$batch <- factor(sce_all_corrected$batch)
 set.seed(100)
 ord <- sample.int(ncol(sce_all_corrected), ncol(sce_all_corrected), replace=FALSE)
 pl <- plotUMAP(sce_all_corrected[,ord], colour_by="Sample")
-pl + scale_colour_manual(values=col_list)
+pl + scale_colour_manual(values=col_list) + ggtitle('UMAP using HVGs, corrected by run')
 
-plotUMAP(sce_all_corrected[,ord], colour_by="run")
-plotUMAP(sce_all_corrected[,ord], colour_by="condition")
-plotUMAP(sce_all_corrected[,ord], colour_by="sex")
-plotUMAP(sce_all_corrected[,ord], colour_by="cxds_score")
-plotUMAP(sce_all_corrected[,ord], colour_by="query_doublet")
+plotUMAP(sce_all_corrected[,ord], colour_by="run") + ggtitle('UMAP using HVGs, corrected by run')
+plotUMAP(sce_all_corrected[,ord], colour_by="condition") + ggtitle('UMAP using HVGs, corrected by run')
+plotUMAP(sce_all_corrected[,ord], colour_by="sex") + ggtitle('UMAP using HVGs, corrected by run')
+plotUMAP(sce_all_corrected[,ord], colour_by="cxds_score") + ggtitle('UMAP using HVGs, corrected by run')
+plotUMAP(sce_all_corrected[,ord], colour_by="query_doublet") + ggtitle('UMAP using HVGs, corrected by run')
 
 ```
 
