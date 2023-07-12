@@ -473,6 +473,49 @@ Based on manual annotation from the clustered data performed using the generated
 ```{r}
 
 ## add in cluster names as sce_all_filt$named_cluster
+#Long-form annotated version including cell subtypes
+for (i in unique(sce_all_filt$cluster)){
+ if(any(i==c('7', '20a')))
+    name <- 'CD4 T Cells' 
+ if(any(i==c('18b')))
+    name <- 'Mitotic CD4 T Cells'
+ if(any(i==c('10')))
+    name <- 'Tregs'
+ if(any(i==c('6', '9a', '20b')))
+    name <- 'CD8 T Cells' 
+ if(any(i==c('18a')))
+    name <- 'Mitotic CD8 T Cells'
+ if(any(i==c('1', '4', '8')))
+    name <- 'Macrophages' 
+ if(any(i==c('15')))
+    name <- 'Monocytes'
+ if(any(i==c('13')))
+    name <- 'cDCs'
+ if(any(i==c('2', '3')))
+    name <- 'Plasma Cells' 
+ if(any(i==c('12', '16')))
+    name <- 'B Cells' 
+ if(any(i==c('14')))
+    name <- 'T-cell like?,' 
+ if(any(i==c('9b', '9c')))
+    name <- 'NK cells' 
+ if(any(i==c('5', '11', '19', '21')))
+    name <- 'Unassigned'
+  sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
+}
+
+# Plot new named clusters
+png('July2023analysis/UMAP_named_clusters.png', height=1080, width=2160)
+p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3, text_size=18) + guides(colour = guide_legend(override.aes = list(size=5)))
+p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3, text_size=18) + guides(colour = guide_legend(override.aes = list(size=5)))
+grid.arrange(p1, p2, ncol=2)
+dev.off()
+
+# Update shiny app to filtered data for easier visualization and identification
+sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
+sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
+saveRDS(sce_all_filt, file='shiny_app/data.rds')
+
 
 ```
 
