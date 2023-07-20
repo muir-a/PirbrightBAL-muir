@@ -199,7 +199,7 @@ sce_filt <- sce_all_corrected
 
 sce_filt <- sce_filt[,!sce_filt$cluster %in% c('5', '17', '11')]
 
-plotUMAP(sce_filt, color_by='cluster')
+plotUMAP(sce_filt, colour_by='cluster')
 
 ```
 
@@ -468,7 +468,6 @@ dev.off()
 
 Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names that can be transposed into figures.
 
-*to be done*
 
 ```{r}
 
@@ -506,8 +505,8 @@ for (i in unique(sce_all_filt$cluster)){
 
 # Plot new named clusters
 png('July2023analysis/UMAP_named_clusters.png', height=1080, width=2160)
-p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3, text_size=18) + guides(colour = guide_legend(override.aes = list(size=5)))
-p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3, text_size=18) + guides(colour = guide_legend(override.aes = list(size=5)))
+p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
 grid.arrange(p1, p2, ncol=2)
 dev.off()
 
@@ -528,6 +527,7 @@ Save everything
 
 ```{r}
 sessionInfo()
+save(sce_all_filt, file='Data/sce_all_filt.RData')
 save(list=ls(), file='ongoing_full_diff.RData') 
 ```
 

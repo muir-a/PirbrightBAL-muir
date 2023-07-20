@@ -45,7 +45,11 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
+# Utility files
+scripted_render.R
+
 # Other types of files and directories to avoid adding any actual data
+*.h5seurat
 *.html
 *.RData
 *sample*/
@@ -53,4 +57,5 @@ vignettes/*.pdf
 *.txt
 *.csv
 *.rds
+*.log
 .DS_Store
