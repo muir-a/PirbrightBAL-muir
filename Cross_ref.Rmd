@@ -25,16 +25,17 @@ PBMC's are from:
 https://data.nal.usda.gov/dataset/data-reference-transcriptomics-porcine-peripheral-immune-cells-created-through-bulk-and-single-cell-rna-sequencing/resource/7c096891-2807-4e4e-8f5f-0c02c6f434c4
 
 Packages
-```{r}
+```{r load-packages}
 library(SingleCellExperiment)
 library(Seurat)
 library(SeuratDisk)
 library(scmap)
 library(scater)
 library(scran)
+library(batchelor)
 ```
 Data
-```{r}
+```{r load-data}
 load('Data/sce_all_filt.RData')
 pigBALsce <- sce_all_filt
 rm(sce_all_filt)
@@ -42,14 +43,14 @@ rm(sce_all_filt)
 pigPBMC <- LoadH5Seurat('Herrera-Uribe/PBMC7_AllCells.h5seurat')
 ```
 OR load workspace from previous session. 
-```{r}
+```{r load workspace}
 #load('Cross_ref.RData')
 ```
 
 
 # Basic comparison of datasets
 
-```{r}
+```{r dataset-metrics}
 #Check size and depth
 dim(pigBALsce)
 dim(pigPBMC)
@@ -81,7 +82,7 @@ Sscrofa 11.1 (V97; http://ftp.ensembl.org/pub/release-97/fasta/sus_scrofa/dna/) 
 custom Perl scripts
 Large White and Landrace pigs
 
-```{r}
+```{r check-initial-shared-genes}
 BAL_genes <- rowData(pigBALsce)$hgnc_symbol
 PBMC_genes <- rownames(pigPBMC@assays$RNA@counts)
 # % BAL genes in PBMC
@@ -95,31 +96,34 @@ sum(rownames(pigBALsce) %in% rownames(pigPBMC@assays$RNA@counts)/length(rownames
 ```
 56% and 68% shared genes, not great but not a disaster either. Lets see if there's a a trend in the genes not shared. 
 
-```{r}
+```{r check-unshared-genes}
 length(BAL_genes[(BAL_genes %in% PBMC_genes)])
 
-head(BAL_genes[!(BAL_genes %in% PBMC_genes)], n=100)
+head(BAL_genes[!(BAL_genes %in% PBMC_genes)], n=50)
 
-head(PBMC_genes[!(PBMC_genes %in% BAL_genes)], n=100)
+head(PBMC_genes[!(PBMC_genes %in% BAL_genes)], n=50)
 
 # Quick check to see if ENS IDs have been updated with new ENSEMBL releases
 old_ENS <- grep('ENS', PBMC_genes[!(PBMC_genes %in% BAL_genes)], value=TRUE)
 
 #Check HVGs
-#top_HVGs_BAL <- getTopHVGs(pigBALsce, n=2000)
-#top_HVGs_PBMC <- getTopHVGs(pigPBMC, n=2000)
+top_HVGs_BAL <- getTopHVGs(pigBALsce, n=2000)
+pigPBMC <- FindVariableFeatures(pigPBMC)
+top_HVGs_PBMC <- VariableFeatures(pigPBMC)
 
-#sum(top_HVGs_BAL %in% top_HVGs_PBMC)/length(top_HVGs_BAL)
-#sum(top_HVGs_PBMC %in% top_HVGs_BAL)/length(top_HVGs_PBMC)
+sum(top_HVGs_BAL %in% top_HVGs_PBMC)/length(top_HVGs_BAL)
+sum(top_HVGs_PBMC %in% top_HVGs_BAL)/length(top_HVGs_PBMC)
 ```
 Cross checked using ENSEMBL ID history checker, IDs are all fine. They shouldn't have been altered by ENSEMBL releases, only new genome builds (both datasets have same genome). 
+
+Shared HVGs is only 3%, this may be a major problem later on. If anything it appears that HVGs are specifically depleted in the shared genes...
 
 BAL gene annotations (for HGNC) include "" where there are no HGNC symbols. PBMC gene annotations are a mix of ENSEMBL IDs and HGNC symbols (single slot). This may be the cause of the problem. 
 
 Next we'll try updating the HGNC symbols for both datasets, otherwise we'll need to try realignment.  
 
 **Note:this chunk exports and imports the workload elsewhere so I could get a faster internet connection.**
-```{r}
+```{r update-HGNC}
 save(BAL_genes, file = 'Data/BAL_genes.RData')
 save(PBMC_genes, file = 'Data/PBMC_genes.RData')
 ##Ran elsewhere
@@ -145,15 +149,22 @@ tail(new_symbols_PBMC, 10)
 136 and 326 genes replaced respectively. 57% and 69% genes now shared, a marginal (1%) improvement by updating the HGNC symbols. The updated symbol lists however are shorter than the originals, by a total of 6 genes, order of the genes appears the same. However I don't trust that the loss of six genes may have shifted the alignment with the original objects, hence I won't be using the updated HGNC symbols despite the 1% improvement. 
 
 Another option is to combine the ENSEMBL IDs with HGNC symbols in the BAL dataset, to mimic the PBMCs. 
-```{r}
+```{r mix-HGNC-with-ENSMEBL-for-BAL}
+library(foreach)
+library(doParallel)
+#Assuming more than 2 cores, leaving 2 cores free
+numCores <- detectCores(logical=FALSE) -2
+registerDoParallel(numCores) 
+
 BAL_genes_mix <- vector("list", length(rownames(pigBALsce)))
 
-for (n in 1:length(rownames(pigBALsce))){
+BAL_genes_mix <- foreach (n=1:length(rownames(pigBALsce))) %dopar%{
   if(rowData(pigBALsce)$hgnc_symbol[n]==""){
     BAL_genes_mix[n] <- rownames(pigBALsce)[n]
   } else {
     BAL_genes_mix[n] <- rowData(pigBALsce)$hgnc_symbol[n]
   }}
+stopImplicitCluster()
 
 BAL_genes_mix <- as.character(BAL_genes_mix)
 
@@ -163,9 +174,9 @@ sum(BAL_genes_mix %in% PBMC_genes)/nrow(pigBALsce)
 sum(PBMC_genes %in% BAL_genes_mix)/nrow(pigPBMC)
 
 # Now we can try updating the BAL genes again (run elsewhere again)
-load('Data/updated_BAL_genes_mix.RData')
 #updated_BAL_genes_mix <- UpdateSymbolList(symbols = BAL_genes_mix)
 #save(updated_BAL_genes_mix, file='Data/updated_BAL_genes_mix.RData')
+load('Data/updated_BAL_genes_mix.RData')
 
 # % BAL genes in PBMC
 sum(updated_BAL_genes_mix %in% new_symbols_PBMC)/length(updated_BAL_genes_mix)
@@ -179,7 +190,7 @@ Updated HGNC symbols provides 64% and 77% shared genes (almost 1% improvement). 
 # Standardisation for scmap
 The first analysis we will be running is scmap, which requires that both datasets are sce, that data is stored in specific named slots and that some slots are cleared. scmap also performs better with fewer features (cell-types), so we'll trim some of the cell types as well. 
 
-```{r}
+```{r create-scmap-compatible-sce}
 # Remove forbidden rowData names (for generation of CompressedGRangesList)
 names(rowData(pigBALsce))[which(names(rowData(pigBALsce))=="start")]="gene_start"
 names(rowData(pigBALsce))[which(names(rowData(pigBALsce))=="end")]="gene_end"
@@ -192,12 +203,9 @@ colData(pigBALsce)$cell_type1 <- pigBALsce$named_cluster
 # Create PBMC sce from seurat object
 pigPBMCsce <- as.SingleCellExperiment(pigPBMC)
 
-# Redo gene annotation to see if this improves shared genes
-#ensembl <- useEnsembl(biomart = "genes", dataset = "sscrofa_gene_ensembl")
-
 # Add PBMC slots 
 rowData(pigPBMCsce)$feature_symbol <- rownames(pigPBMC@assays$RNA@counts)
-colData(pigPBMCsce)$cell_type1 <- pigPBMCsce$celltypes
+colData(pigPBMCsce)$cell_type1 <- as.character(pigPBMCsce$celltypes)
 
 # Restrict both datasets to shared genes only
 length(rownames(pigBALsce))
@@ -208,11 +216,29 @@ length(rownames(pigPBMCsce))
 pigPBMCsce <- pigPBMCsce[rowData(pigPBMCsce)$feature_symbol %in% rowData(pigBALsce)$feature_symbol]
 length(rownames(pigPBMCsce))
 
+# Trim cell-types to be mapped (remove tissue specific or unidentified cells, combine cell sub-types)
+paste(unique(colData(pigBALsce)$cell_type1))
+pigBALsce <- pigBALsce[,colData(pigBALsce)$cell_type1 != "Unassigned"]
+pigBALsce <- pigBALsce[,colData(pigBALsce)$cell_type1 != "T-cell like?"]
+pigBALsce$cell_type1[pigBALsce$cell_type1=='Mitotic CD8 T Cells'] <- 'CD8 T Cells'
+pigBALsce$cell_type1[pigBALsce$cell_type1=='Mitotic CD4 T Cells'] <- 'CD4 T Cells'
+pigBALsce$cell_type1[pigBALsce$cell_type1=='Tregs'] <- 'CD4 T Cells'
+paste(unique(colData(pigBALsce)$cell_type1))
+
+paste(unique(colData(pigPBMCsce)$cell_type1))
+pigPBMCsce <- pigPBMCsce[,colData(pigPBMCsce)$cell_type1 != "Unknown"]
+pigPBMCsce <- pigPBMCsce[,colData(pigPBMCsce)$cell_type1 != "Erythrocytes"]
+pigPBMCsce <- pigPBMCsce[,colData(pigPBMCsce)$cell_type1 != "CD2- GD T cells"]
+pigPBMCsce <- pigPBMCsce[,colData(pigPBMCsce)$cell_type1 != "CD2+ GD T cells"]
+pigPBMCsce <- pigPBMCsce[,colData(pigPBMCsce)$cell_type1 != "pDCs"]
+pigPBMCsce$cell_type1[pigPBMCsce$cell_type1=='ASC'] <- 'Antibody secreting cell'
+paste(unique(colData(pigPBMCsce)$cell_type1))
+
 
 ```
 
 
-```{r}
+```{r visualise new sce data}
 #Sanity check, visualise the converted data, attempt to recreate published visuals
 set.seed(123)
 pigPBMCsce <- fixedPCA(pigPBMCsce, subset.row=NULL)
@@ -237,16 +263,16 @@ plotTSNE(pigPBMCsce, colour_by="CD14", point_size=0.3) + guides(colour = guide_l
 ```
 Plots aren't the cleanest in terms of cluster localisation (compared to published), however CD3E and CD14 appear to localise to the correct cell types, so the conversion hasn't broken anything and we're okay to move on. 
 
-# scmap Feature selection
-Calculate indexes for all shared genes and all cell types
+# scmap cell to cell-type mapping
+Feature selection: Calculate indexes for all shared genes and all cell types
+From repeated testing: using too many genes appears to drop cell-types from analysis and reduces the mapping accuracy. Hence we'll stick to fewer numbers of genes.  
+```{r scmap select features}
+pigBALsce <- selectFeatures(pigBALsce, n_features=200, suppress_plot = FALSE)
 
-```{r}
-pigBALsce <- selectFeatures(pigBALsce, suppress_plot = FALSE)
-
-pigPBMCsce <- selectFeatures(pigPBMCsce, suppress_plot = FALSE)
+pigPBMCsce <- selectFeatures(pigPBMCsce, n_features=200, suppress_plot = FALSE)
 ```
 Calculate cell-type index.
-```{r}
+```{r scmap indexClusters}
 pigBALsce <- indexCluster(pigBALsce)
 pigPBMCsce <- indexCluster(pigPBMCsce)
 
@@ -255,7 +281,7 @@ heatmap(as.matrix(metadata(pigBALsce)$scmap_cluster_index))
 heatmap(as.matrix(metadata(pigPBMCsce)$scmap_cluster_index))
 ```
 Data projection
-```{r}
+```{r scmap project cells}
 BAL_to_PBMC <- scmapCluster(
   projection = pigBALsce,
   index_list = list(
@@ -276,13 +302,132 @@ write.csv(BAL_proj_table, file='Data/BAL_projection.csv')
 table(colData(pigPBMCsce)$cell_type1, PBMC_to_BAL$scmap_cluster_labs)
 
 ```
+Plot Sankey diagram
+```{r plot Sankey, scmap cell-types}
+png(file='Data/Sankey_cmap_cell-types.png', height=1080, width=2160)
+plot(getSankey(colData(pigBALsce)$cell_type1,  BAL_to_PBMC$scmap_cluster_labs[,1]))
+dev.off()
+```
+
+Overall scmap hasn't worked, either the two datasets don't share genes in their respective cell types or scmap is failing somehow. An oddity is that the projection only seems to be mapping to 3-5 cell types (rather than all cell types), evidently something isn't functioning correctly. # Too many cells?#
+
+Will try cell to cell mapping as well since everything is set up. 
+
+# scmap cell to cell mapping
+Calculate index
+```{r scmap index cells}
+set.seed(123)
+pigBALsce <- indexCell(pigBALsce)
+pigPBMCsce <- indexCell(pigPBMCsce)
+```
+
+View head
+```{r cellmap check subclusters}
+metadata(pigBALsce)$scmap_cell_index$subclusters[1:5,1:5]
+```
+
+map cell to cell
+```{r scmap map cell to cell}
+BAL_to_PBMC_cells <- scmapCell(
+  projection = pigBALsce,
+  index_list = list(
+    mapcc = metadata(pigPBMCsce)$scmap_cell_index
+  ),
+  w = 5
+)
+```
+
+Check nearest neighbors.
+```{r scmap cell to cell nearest neighbors}
+BAL_to_PBMC_cells$mapcc[[1]][,1:5]
+```
+
+Cell-type by nearest neighbors.
+```{r cell to cell cell-types}
+cell_type_NN <- colData(pigPBMCsce)$cell_type1[BAL_to_PBMC_cells$mapcc[[1]][1,]]
+head(cell_type_NN)
+```
+
+Annotate with cell types
+```{r annotate cell to cell with cell-types and plot}
+scmapCell_clusters <- scmapCell2Cluster(
+  BAL_to_PBMC_cells, 
+  list(
+    as.character(colData(pigBALsce)$cell_type1)
+  )
+)
+
+head(scmapCell_clusters$scmap_cluster_labs)
+
+png(file='Data/Sankey_cmap_cell-cell.png', height=1080, width=2160)
+plot(
+  getSankey(
+    colData(pigBALsce)$cell_type1, 
+    scmapCell_clusters$scmap_cluster_labs[,"mapcc"],
+  )
+)
+dev.off()
+```
+scmap cell-cell mapping is still mapping the vast majority to unassigned, hence this is still not viable. 
+
+Next we'll try mnnCorrect, which corrects for experimental differences to allow for joint or merged analysis. 
+
+# mnnCorrect
+Genes in both datasets need to be in identical order. 
+```{r standardise for mnnCorrect}
+pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
+rownames(pigPBMCsce) <- rowData(pigPBMCsce)$feature_symbol
+rownames(pigBALsce) <- rowData(pigBALsce)$feature_symbol
+head(rowData(pigBALsce)$feature_symbol, n=10)
+head(rowData(pigPBMCsce)$feature_symbol, n=10)
+identical(rownames(pigPBMCsce), rownames(pigBALsce))
+identical(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol)
+```
+
+Run mnnCorrect
+**Warning: this step is compute heavy. Will take several hours to complete.**
+```{r run mnnCorrect}
+#mnnCorrected <- mnnCorrect(logcounts(pigBALsce), logcounts(pigPBMCsce), k=200)
+save(mnnCorrected, file='Data/mnnCorrected.RData')
+#load('Data/mnnCorrected.RData')
+```
+
+Return mnn pairs, evaluate if sufficent number (else adjust k)
+```{r check mnn pairs}
+dim(mnnCorrected$pairs[[1]]) # BAL -> others
+dim(mnnCorrected$pairs[[2]]) # PBMC -> others
+```
+
+Check unique pairs
+```{r check mnn unique pairs}
+head(mnnCorrected$pairs[[2]])
+total_pairs <- nrow(mnnCorrected$pairs[[2]])
+n_unique_PBMC <- length(unique((mnnCorrected$pairs[[2]][,1])))
+n_unique_BAL <- length(unique((mnnCorrected$pairs[[2]][,2])))
+```
+
+# Joint analysis
+
+```{r joint TSNE}
+library("Rtsne")
+joint_expression_matrix <- cbind(mnnCorrected$corrected[[1]], mnnCorrected$corrected[[2]])
+
+joint_tsne <- Rtsne(t(joint_expression_matrix[rownames(joint_expression_matrix) %in% var.genes,]), initial_dims=10, theta=0.75, check_duplicates=FALSE, max_iter=200, stop_lying_iter=50, mom_switch_iter=50)
+
+dataset_labels <- factor(rep(c("m", "s"), times=c(ncol(pigBALsce), ncol(pigPBMCsce))))
+cell_type_labels <- factor(c(colData(pigBALsce)$cell_type1, colData(pigPBMCsce)$cell_type1))
+
+png('Data/Joint_TSNE.png', height=1080, width=2160)
+plot(joint_tsne$Y[,1], joint_tsne$Y[,2], pch=c(16,1)[dataset_labels], col=rainbow(length(levels(cell_type_labels)))[cell_type_labels])
+dev.off()
+```
 
 
 # Wrapping up
 
 Save everything
 
-```{r}
+```{r save everything}
 sessionInfo()
 save(list=ls(), file='Cross_ref.RData') 
 ```
