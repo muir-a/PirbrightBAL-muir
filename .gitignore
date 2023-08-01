@@ -55,6 +55,7 @@ scripted_render.R
 *sample*/
 *analysis/
 *.txt
+*.png
 *.csv
 *.rds
 *.log

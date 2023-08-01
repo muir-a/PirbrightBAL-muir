@@ -495,7 +495,7 @@ for (i in unique(sce_all_filt$cluster)){
  if(any(i==c('12', '16')))
     name <- 'B Cells' 
  if(any(i==c('14')))
-    name <- 'T-cell like?,' 
+    name <- 'T-cell like?' 
  if(any(i==c('9b', '9c')))
     name <- 'NK cells' 
  if(any(i==c('5', '11', '19', '21')))
