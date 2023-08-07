@@ -499,12 +499,12 @@ for (i in unique(sce_all_filt$cluster)){
  if(any(i==c('9b', '9c')))
     name <- 'NK cells' 
  if(any(i==c('5', '11', '19', '21')))
-    name <- 'Unassigned'
+    name <- 'Unknown'
   sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
 }
 
 # Plot new named clusters
-png('July2023analysis/UMAP_named_clusters.png', height=1080, width=2160)
+png('Results/UMAP_named_clusters.png', height=1080, width=2160)
 p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
 p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
 grid.arrange(p1, p2, ncol=2)
