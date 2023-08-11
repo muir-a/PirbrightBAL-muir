@@ -235,20 +235,35 @@ rownames(pigBALsce) <- rowData(pigBALsce)$feature_symbol
 BAL_feature_genes <- findMarkers(pigBALsce, groups=colData(pigBALsce)$cell_type1)
 PBMC_feature_genes <- findMarkers(pigPBMCsce, groups=colData(pigPBMCsce)$cell_type1)
 
+cutoff <- 50
+
 BAL_gene_shortlist <- NULL
+BAL_cluster_shortlist <- NULL
 for (n in 1:length(BAL_feature_genes)){
-  top_genes <- rownames(BAL_feature_genes[[n]])[1:50]
+  top_genes <- rownames(BAL_feature_genes[[n]])[1:cutoff]
   BAL_gene_shortlist <- c(BAL_gene_shortlist, top_genes)
+  cluster_list <- rep(names(BAL_feature_genes)[n], length(top_genes))
+  BAL_cluster_shortlist <- c(BAL_cluster_shortlist, cluster_list)
 }
+BAL_feature_genes_df <- data.frame(matrix(NA, nrow = cutoff*length(BAL_feature_genes), ncol = 2))
+colnames(BAL_feature_genes_df) <- c('cluster', 'top_genes')
+BAL_feature_genes_df$cluster <- BAL_cluster_shortlist
+BAL_feature_genes_df$top_genes <- BAL_gene_shortlist
 BAL_gene_shortlist <- unique(BAL_gene_shortlist)
 
 PBMC_gene_shortlist <- NULL
+PBMC_cluster_shortlist <- NULL
 for (n in 1:length(PBMC_feature_genes)){
-  top_genes <- rownames(PBMC_feature_genes[[n]])[1:50]
+  top_genes <- rownames(PBMC_feature_genes[[n]])[1:cutoff]
   PBMC_gene_shortlist <- c(PBMC_gene_shortlist, top_genes)
+  cluster_list <- rep(names(PBMC_feature_genes)[n], length(top_genes))
+  PBMC_cluster_shortlist <- c(PBMC_cluster_shortlist, cluster_list)  
 }
+PBMC_feature_genes_df <- data.frame(matrix(NA, nrow = cutoff*length(PBMC_feature_genes), ncol = 2))
+colnames(PBMC_feature_genes_df) <- c('cluster', 'top_genes')
+PBMC_feature_genes_df$cluster <- PBMC_cluster_shortlist
+PBMC_feature_genes_df$top_genes <- PBMC_gene_shortlist
 PBMC_gene_shortlist <- unique(PBMC_gene_shortlist)
-  
 ```
 
 ```{r visualise-new-sce-data}
@@ -275,7 +290,6 @@ save(list=ls(), file='Data/CellTypeSave.RData')
 # scmap BAL cluster to PBMC cluster
 select features on BAL
 ```{r select-features-BAL-clusters}
-#pigBALsce <- selectFeatures(pigBALsce, n_features=400, suppress_plot = FALSE)
 pigBALsce <- setFeatures(pigBALsce, BAL_gene_shortlist)
 ```
 index on BAL
@@ -284,7 +298,6 @@ pigBALsce <- indexCluster(pigBALsce)
 ```
 select features on PBMC
 ```{r select-features-PBMC-clusters}
-#pigPBMCsce <- selectFeatures(pigPBMCsce, n_features=400, suppress_plot = FALSE)
 pigPBMCsce <- setFeatures(pigPBMCsce, PBMC_gene_shortlist)
 ```
 index on PBMC
@@ -440,32 +453,31 @@ htmltools::save_html(sanPlot, file = "Results/cluster_map_sankey.html")
 
 # Identify key mapping genes
 Use original gene counts (of selected features), subset by interesting comparisons (cell-types), sort, and plot as heatmaps.
-```{r identify-map-genes, eval=FALSE}
-# fetch selected gene features from PBMC
-PBMC_feature_genes <- rownames(metadata(pigPBMCsce)$scmap_cluster_index)
+```{r identify-map-genes}
+# Re-order gene names for convenience
+pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
+identical(rownames(pigPBMCsce), rownames(pigBALsce))
 
-feature_BAL_sce <- pigBALsce[rowData(pigBALsce)$feature_symbol %in% PBMC_feature_genes, ]
-feature_PBMC_sce <- pigPBMCsce[rowData(pigPBMCsce)$feature_symbol %in% PBMC_feature_genes, ]
+# Normalise between datasets, useful for visualisation and later mnncorrect
 
+library(scuttle)
 
-# Combine
-feature_df_all <- merge(BAL_feature_df, PBMC_feature_df, by='row.names', all=TRUE)
-rownames(feature_df_all) <- feature_df_all$Row.names
-feature_df_all <- feature_df_all[colnames(feature_df_all) != 'Row.names']
-feature_df_share <- merge(BAL_feature_df2, PBMC_feature_df2, by='row.names', all=TRUE)
-rownames(feature_df_share) <- feature_df_share$Row.names
-feature_df_share <- feature_df_share[colnames(feature_df_share) != 'Row.names']
+# B cells
+B_Cell_genes <- PBMC_feature_genes_df[grep(pattern=c("10|16"), x=PBMC_feature_genes_df$cluster), ]
+B_Cell_genes <- unique(B_Cell_genes$top_genes)
 
-#Plot 'interesting' heatmaps
-matrix_all <- as.matrix(x=feature_df_all, rownames=TRUE)
-matrix_share <- as.matrix(x=feature_df_share, rownames=TRUE)
+BAL_B_cells <- pigBALsce[rownames(pigBALsce) %in% B_Cell_genes, ]
+BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16", "19")]
+PBMC_B_cells <- pigPBMCsce[rownames(pigPBMCsce) %in% B_Cell_genes, ]
+PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("10", "16")]
+identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
 
-BCellMatrix <- matrix_share[,c("BAL, B Cells, 12", "BAL, B Cells, 16", "PBMC, B cells, 10", "PBMC, B cells, 16")]
-BCellMatrix <- BCellMatrix[rowSums(BCellMatrix) != 0, ]
+BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 
-
-heatmap(BCellMatrix, Colv = NA, Rowv = NA, scale="column", margins=c(15,5))
-
+png(filename='Results/B_Cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap(cbind(BAL_B_cells, PBMC_B_cells), margins=c(15,5), keep.dendro = FALSE)
+dev.off()
 ```
 
 Next we'll try mnnCorrect, which corrects for experimental differences to allow for joint or merged analysis. 
@@ -481,42 +493,51 @@ Genes in both datasets need to be in identical order.
 pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
 head(rowData(pigBALsce)$feature_symbol, n=10)
 head(rowData(pigPBMCsce)$feature_symbol, n=10)
+tail(rownames(pigBALsce), n=10)
+tail(rownames(pigPBMCsce), n=10)
 identical(rownames(pigPBMCsce), rownames(pigBALsce))
 identical(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol)
+```
+Restricting genes fed to mnnCorrect to improve merging and speed up computation. 
+```{r trim-genes-mnncorrect}
+Union_feature_genes <- paste0(c(BAL_gene_shortlist, PBMC_gene_shortlist))
+Union_feature_genes <- unique(Union_feature_genes)
+
+BAL_Union_sce <- pigBALsce[rownames(pigBALsce) %in% Union_feature_genes, ]
+PBMC_Union_sce <- pigPBMCsce[rownames(pigPBMCsce) %in% Union_feature_genes, ]
+identical(rownames(BAL_Union_sce), rownames(PBMC_Union_sce))
 ```
 
 Run mnnCorrect
 **Warning: this step is compute heavy. Will take several days to complete.**
 ```{r run-mnnCorrect}
 ## Trying fast MNN to see how 'fast' it is. Not ideal since it reduces results to a PC space.
-#start_time <- Sys.time()
-#fastmnnCorrected <- fastMNN(logcounts(pigBALsce), logcounts(pigPBMCsce), k=20)
-#end_time <- Sys.time()
-#fastmnn_time <- end_time-start_time
-#save(fastmnnCorrected, file='Data/fastmnnCorrected_k20.RData')
+start_time <- Sys.time()
+fastmnnCorrected <- fastMNN(logcounts(BAL_Union_sce), logcounts(PBMC_Union_sce), k=20)
+end_time <- Sys.time()
+fastmnn_time <- end_time-start_time
+save(fastmnnCorrected, file='Data/fastmnnCorrected_feature_k20.RData')
 #load('Data/fastmnnCorrected.RData')
 start_time <- Sys.time()
-#mnnCorrected <- mnnCorrect(logcounts(pigBALsce), logcounts(pigPBMCsce), k=5)
+mnnCorrected <- mnnCorrect(logcounts(BAL_Union_sce), logcounts(PBMC_Union_sce), k=20)
 end_time <- Sys.time()
 slowmnn_time <- end_time-start_time
 slowmnn_time
-save(mnnCorrected, file='Data/mnnCorrected_k5.RData')
+save(mnnCorrected, file='Data/mnnCorrected_feature_k20.RData')
 #load('Data/mnnCorrected_k200.RData')
 mnnCorrected
 ```
 
 Return mnn pairs, evaluate if sufficent number (else adjust k)
-```{r check-mnn-pairs, eval=FALSE}
+```{r check-mnn-pairs}
 metadata(mnnCorrected)$merge.info
 
 colData(mnnCorrected)
 ```
 
-
-
 # Joint analysis
 
-```{r joint-TSNE-UMAP, eval=FALSE}
+```{r joint-TSNE-UMAP}
 library(gridExtra)
 
 verbose_labels <- c(pigBALsce$verbose_cluster, pigPBMCsce$verbose_cluster)
