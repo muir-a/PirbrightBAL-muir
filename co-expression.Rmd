@@ -1,0 +1,73 @@
+---
+title: "co-expression"
+author: "Andrew_Muir"
+date: "8/22/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+Following on from 'differential all'(Cross-ref is skipped). This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) with the end goal of revealing putative causal networks. 
+
+# Load packages and data
+
+Packages
+```{r load-packages}
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(dcanr)
+```
+
+Data
+```{r load-data}
+load('Data/sce_all_filt.RData')
+```
+
+Trim genes to be investigated. Either DE or HVGs. 
+```{r gene-lists}
+dim(sce_all_filt)
+#HVGs
+top_HVGs <- getTopHVGs(sce_all_filt, n=500)
+#DE by clusters
+DEs_byCluster <- findMarkers(sce_all_filt, groups=colData(sce_all_filt)$cluster)
+
+cutoff <- 50
+DEs_byCluster_shortlist <- NULL
+DEs_byCluster_clusterlist <- NULL
+for (n in 1:length(DEs_byCluster)){
+  top_genes <- rownames(DEs_byCluster[[n]])[1:cutoff]
+  DEs_byCluster_shortlist <- c(DEs_byCluster_shortlist, top_genes)
+  cluster_list <- rep(names(DEs_byCluster)[n], length(top_genes))
+  DEs_byCluster_clusterlist <- c(DEs_byCluster_clusterlist, cluster_list)
+}
+DEs_byCluster_df <- data.frame(matrix(NA, nrow = cutoff*length(DEs_byCluster), ncol = 2))
+colnames(DEs_byCluster_df) <- c('cluster', 'top_genes')
+DEs_byCluster_df$cluster <- DEs_byCluster_clusterlist
+DEs_byCluster_df$top_genes <- DEs_byCluster_shortlist
+DEs_byCluster_shortlist <- unique(DEs_byCluster_shortlist)
+
+#DE by condition
+DEs_byCondition <- findMarkers(sce_all_filt, groups=colData(sce_all_filt)$condition)
+
+cutoff <- 50
+DEs_byCondition_shortlist <- NULL
+DEs_byCondition_Conditionlist <- NULL
+for (n in 1:length(DEs_byCondition)){
+  top_genes <- rownames(DEs_byCondition[[n]])[1:cutoff]
+  DEs_byCondition_shortlist <- c(DEs_byCondition_shortlist, top_genes)
+  Condition_list <- rep(names(DEs_byCondition)[n], length(top_genes))
+  DEs_byCondition_Conditionlist <- c(DEs_byCondition_Conditionlist, Condition_list)
+}
+DEs_byCondition_df <- data.frame(matrix(NA, nrow = cutoff*length(DEs_byCondition), ncol = 2))
+colnames(DEs_byCondition_df) <- c('Condition', 'top_genes')
+DEs_byCondition_df$Condition <- DEs_byCondition_Conditionlist
+DEs_byCondition_df$top_genes <- DEs_byCondition_shortlist
+DEs_byCondition_shortlist <- unique(DEs_byCondition_shortlist)
+
+```
+

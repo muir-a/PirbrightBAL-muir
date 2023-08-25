@@ -468,8 +468,9 @@ dev.off()
 
 Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names that can be transposed into figures.
 
-
 ```{r}
+# Manual annotation revealed that cluster 19 are epithelial cells, so we'll remove them from further analysis
+sce_all_filt <- sce_all_filt[,!sce_all_filt$cluster %in% c('19')]
 
 ## add in cluster names as sce_all_filt$named_cluster
 #Long-form annotated version including cell subtypes
@@ -495,10 +496,10 @@ for (i in unique(sce_all_filt$cluster)){
  if(any(i==c('12', '16')))
     name <- 'B Cells' 
  if(any(i==c('14')))
-    name <- 'T-cell like?' 
+    name <- 'T-cell-like' 
  if(any(i==c('9b', '9c')))
     name <- 'NK cells' 
- if(any(i==c('5', '11', '19', '21')))
+ if(any(i==c('21')))
     name <- 'Unknown'
   sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
 }
@@ -515,11 +516,7 @@ sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
 saveRDS(sce_all_filt, file='shiny_app/data.rds')
 
-
 ```
-
-
-
 
 # Wrapping up
 
