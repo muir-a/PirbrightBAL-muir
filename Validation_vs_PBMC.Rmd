@@ -543,15 +543,22 @@ identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
 BAL_heat_all <- as.matrix(logcounts(aggregateAcrossCells(BAL_heat_all, ids=BAL_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBMC_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
+write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
 
 png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
 heatmap.2(heat_all_Matrix, margins=c(30,20), scale="row", col = bluered(100), cexRow=2, cexCol=2,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10)) 
 dev.off()
 
+# Quick normalisation
+pigBALsce <- computePooledFactors(pigBALsce, clusters=pigBALsce$cluster, assay.type="counts")
+pigBALsce <- logNormCounts(pigBALsce)
+pigPBMCsce <- computePooledFactors(pigPBMCsce, cluster=pigPBMCsce$seurat_clusters, assay.type="counts")
+pigPBMCsce <- logNormCounts(pigPBMCsce)
+
 # B cells
 #B_Cell_genes <- PBMC_feature_genes_df[grep(pattern=c("10|16"), x=PBMC_feature_genes_df$cluster), ]
 #B_Cell_genes <- unique(B_Cell_genes$top_genes)
-B_Cell_genes <- c("ANGPTL1", "SCAP", "ENSSSCG00000033183", "ZBTB32", "BLK", "SNX3", "SMC6", "LTB", "MS4A1", "ENSSSCG00000033721", "RPS3A", "RPS26", "RPS11", "RPL37", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "ITM28", "ANXA1", "TYROB")
+B_Cell_genes <- c("ANGPTL1", "SCAP", "ENSSSCG00000033183", "ZBTB32", "BLK", "SNX3", "SMC6", "LTB", "MS4A1", "ENSSSCG00000033721", "RPS3A", "RPS26", "RPS11", "RPL37", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "ITM28", "ANXA1", "TYROB", "CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8")
 
 BAL_B_cells <- pigBALsce[rownames(pigBALsce) %in% B_Cell_genes, ]
 BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
@@ -559,13 +566,12 @@ PBMC_B_cells <- pigPBMCsce[rownames(pigPBMCsce) %in% B_Cell_genes, ]
 PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("10", "16")]
 identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
 
-B_cells_meandiff <- cal_cor(BAL_B_cells, PBMC_B_cells)
-write.csv(B_cells_meandiff, file='Results/B_cells_meandiff.csv')
+#B_cells_meandiff <- cal_cor(BAL_B_cells, PBMC_B_cells)
+#write.csv(B_cells_meandiff, file='Results/B_cells_meandiff.csv')
 
 BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
-#B_Cells_Matrix <- B_Cells_Matrix[rowSums(B_Cells_Matrix) > 2, ]
 
 png(filename='Results/B_Cells_Cross_Heatmap.png', height=1080, width=2160)
 heatmap(B_Cells_Matrix, margins=c(15,5), Colv=NA, scale="none", keep.dendro = FALSE)
@@ -574,7 +580,7 @@ dev.off()
 # CD8 and NK
 #CD8NK_genes <- PBMC_feature_genes_df[grep(pattern=c("1|17|21"), x=PBMC_feature_genes_df$cluster), ]
 #CD8NK_genes <- unique(CD8NK_genes$top_genes)
-CD8NK_genes <- c("PDK1", "NCR1", "PLD4", "EVL", "TCF7", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CD8A", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "KLRB1", "CD74", "S100A6", "CD3E", "ITM2B", "ANXA1", "TYROBP", "TBXAS1")
+CD8NK_genes <- c("PDK1", "NCR1", "PLD4", "EVL", "TCF7", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD74", "S100A6", "ITM2B", "ANXA1", "TYROBP", "TBXAS1", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
 
 BAL_CD8NK <- pigBALsce[rownames(pigBALsce) %in% CD8NK_genes, ]
 BAL_CD8NK <- BAL_CD8NK[, BAL_CD8NK$cluster %in% c("9a", "9b", "9c", "21")]
@@ -582,13 +588,12 @@ PBMC_CD8NK <- pigPBMCsce[rownames(pigPBMCsce) %in% CD8NK_genes, ]
 PBMC_CD8NK <- PBMC_CD8NK[, PBMC_CD8NK$seurat_clusters %in% c("1", "17", "21")]
 identical(rownames(PBMC_CD8NK), rownames(BAL_CD8NK))
 
-CD8NK_meandiff <- cal_cor(BAL_CD8NK, PBMC_CD8NK)
-write.csv(CD8NK_meandiff, file='Results/CD8NK_meandiff.csv')
+#CD8NK_meandiff <- cal_cor(BAL_CD8NK, PBMC_CD8NK)
+#write.csv(CD8NK_meandiff, file='Results/CD8NK_meandiff.csv')
 
 BAL_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(BAL_CD8NK, ids=BAL_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
-#CD8NK_Matrix <- CD8NK_Matrix[rowSums(CD8NK_Matrix) > 3, ]
 
 png(filename='Results/CD8NK_Cross_Heatmap.png', height=1080, width=2160)
 heatmap(CD8NK_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
@@ -597,7 +602,7 @@ dev.off()
 # Mitotic T cells
 #mitotic_genes <- PBMC_feature_genes_df[grep(pattern=c("0|14|28"), x=PBMC_feature_genes_df$cluster), ]
 #mitotic_genes <- unique(mitotic_genes$top_genes)
-mitotic_genes <- c("CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "LCK", "RDX", "ENSSSCG00000029596", "ACTG1", "S100A6", "CD3E", "ENSSSCG00000033721", "ENSSSCG00000014565")
+mitotic_genes <- c("CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "LCK", "RDX", "ENSSSCG00000029596", "ACTG1", "S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
 
 BAL_mitotic <- pigBALsce[rownames(pigBALsce) %in% mitotic_genes, ]
 BAL_mitotic <- BAL_mitotic[, BAL_mitotic$cluster %in% c("18a", "18b")]
@@ -605,13 +610,12 @@ PBMC_mitotic <- pigPBMCsce[rownames(pigPBMCsce) %in% mitotic_genes, ]
 PBMC_mitotic <- PBMC_mitotic[, PBMC_mitotic$seurat_clusters %in% c("0", "14", "28")]
 identical(rownames(PBMC_mitotic), rownames(BAL_mitotic))
 
-mitotic_meandiff <- cal_cor(BAL_mitotic, PBMC_mitotic)
-write.csv(mitotic_meandiff, file='Results/mitotic_meandiff.csv')
+#mitotic_meandiff <- cal_cor(BAL_mitotic, PBMC_mitotic)
+#write.csv(mitotic_meandiff, file='Results/mitotic_meandiff.csv')
 
 BAL_mitotic <- as.matrix(logcounts(aggregateAcrossCells(BAL_mitotic, ids=BAL_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
-#mitotic_matrix <- mitotic_matrix[rowSums(mitotic_matrix) > 2, ]
 
 png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=1080, width=2160)
 heatmap(mitotic_matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
@@ -620,7 +624,7 @@ dev.off()
 # Conventional T cells
 #T_cell_genes <- PBMC_feature_genes_df[grep(pattern=c("4|14|28"), x=PBMC_feature_genes_df$cluster), ]
 #T_cell_genes <- unique(T_cell_genes$top_genes)
-T_cell_genes <- c("S100A6", "CD3E", "ENSSSCG00000033721", "ENSSSCG00000014565", "CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "IL6R", "CGA", "CD226", "PDK1", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CD8A", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "KLRB1", "CD5")
+T_cell_genes <- c("S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "IL6R", "CGA", "CD226", "PDK1", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
 
 BAL_T_cell <- pigBALsce[rownames(pigBALsce) %in% T_cell_genes, ]
 BAL_T_cell <- BAL_T_cell[, BAL_T_cell$cluster %in% c("6", "7", "10")]
@@ -628,13 +632,12 @@ PBMC_T_cell <- pigPBMCsce[rownames(pigPBMCsce) %in% T_cell_genes, ]
 PBMC_T_cell <- PBMC_T_cell[, PBMC_T_cell$seurat_clusters %in% c("4", "14", "28")]
 identical(rownames(PBMC_T_cell), rownames(BAL_T_cell))
 
-T_cell_meandiff <- cal_cor(BAL_T_cell, PBMC_T_cell)
-write.csv(T_cell_meandiff, file='Results/T_cells_meandiff.csv')
+#T_cell_meandiff <- cal_cor(BAL_T_cell, PBMC_T_cell)
+#write.csv(T_cell_meandiff, file='Results/T_cells_meandiff.csv')
 
 BAL_T_cell <- as.matrix(logcounts(aggregateAcrossCells(BAL_T_cell, ids=BAL_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
-#T_Cell_Matrix <- T_Cell_Matrix[rowSums(T_Cell_Matrix) > 2,]
 
 png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=1080, width=2160)
 heatmap(T_Cell_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)

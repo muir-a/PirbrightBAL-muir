@@ -511,6 +511,10 @@ p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconst
 grid.arrange(p1, p2, ncol=2)
 dev.off()
 
+#Redo normalization as logcounts now that clusters have been removed
+sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
+sce_all_filt <- logNormCounts(sce_all_filt)
+
 # Update shiny app to filtered data for easier visualization and identification
 sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
