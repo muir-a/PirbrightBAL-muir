@@ -50,6 +50,7 @@ vignettes/*.pdf
 scripted_render.R
 
 # Other types of files and directories to avoid adding any actual data
+LICENSE
 *.h5seurat
 *.html
 *.RData
@@ -60,4 +61,5 @@ scripted_render.R
 *.csv
 *.rds
 *.log
+*.js
 .DS_Store
