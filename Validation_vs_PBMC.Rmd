@@ -1,0 +1,812 @@
+---
+title: "Validation_vs_PBMC"
+author: "Andrew_Muir"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+Continuing from 'differential all.Rmd'.
+
+This script performs a familiarity analysis between the clusters and cell types identified so far in the PirbrightBAL analysis against the reference transcriptome published by Herrera-Uribe et al. 2021 (https://doi.org/10.3389%2Ffgene.2021.689406). 
+
+This includes a mix of cell-type mapping, cluster mapping and cell to cell mapping. 
+
+**Note: This script is compute heavy so it is strongly recommended to run on a compute-cluster/workstation with more than 32 GB of memory and at least 16cores. Additionally, this script uses foreach and doParallel which don't play nicely with Windows (Linux and Mac should be fine), if using Windows set numCores=1 or replace foreach with standard for loops.**
+
+# Load packages and data
+pigBALsce is from 'differential all.Rmd'.
+PBMC's are from:
+https://data.nal.usda.gov/dataset/data-reference-transcriptomics-porcine-peripheral-immune-cells-created-through-bulk-and-single-cell-rna-sequencing/resource/7c096891-2807-4e4e-8f5f-0c02c6f434c4
+
+Packages
+```{r load-packages}
+library(SingleCellExperiment)
+library(Seurat)
+library(SeuratDisk)
+library(scmap)
+library(scater)
+library(scran)
+library(batchelor)
+```
+Data
+```{r load-data}
+load('Data/sce_all_filt.RData')
+pigBALsce <- sce_all_filt
+rm(sce_all_filt)
+
+pigPBMC <- LoadH5Seurat('Herrera-Uribe/PBMC7_AllCells.h5seurat')
+```
+OR load workspace from previous session. 
+```{r load-workspace}
+#load('Data/CellTypeSave.RData') #post pre-processing and cell type validation
+#load('Data/ClusterSave.RData') #post scmap cluster mapping
+#load('Data/mnnCorrectSave.RData') #Post mnnCorrection
+```
+
+# Basic comparison of datasets
+
+```{r dataset-metrics}
+#Check size and depth
+dim(pigBALsce)
+dim(pigPBMC)
+
+#Check identified cell types
+unique(pigBALsce$named_cluster)
+unique(pigPBMC$celltypes)
+
+#Check number of clusters
+unique(pigBALsce$cluster)
+unique(pigPBMC$seurat_clusters)
+
+# Check scale to see if additional normalisation is required
+range(counts(pigBALsce))
+range(GetAssayData(object = pigPBMC, slot = "counts"))
+mean(counts(pigBALsce))
+mean(GetAssayData(object = pigPBMC, slot = "counts"))
+
+#p1 <- hist(counts(pigBALsce)[counts(pigBALsce) != 0])
+#p2 <- hist(GetAssayData(object = pigPBMC, slot = "counts")[GetAssayData(object = pigPBMC, slot = "counts") != 0])
+#plot( p1, col=rgb(0,0,1,1/4), xlim=c(0,100))  
+#plot( p2, col=rgb(1,0,0,1/4), xlim=c(0,100), add=T)
+
+```
+BAL dataset has 3000 more genes and twice as many cells as PBMC. 
+
+Some good overlap in the important cell types, though the BAL has several cell subtypes that are combined in the PBMC dataset (e.g. mitotic T cells and plasma cells). Obviously this is partially due to the different tissues. We'll deal with this later. 
+
+19 vs 36 clusters, though BAL has had doublets/low-quality clusters removed post clustering. Again deal with synchronization later.
+
+# Check alignment and gene annotation
+Both datasets are aligned to the same pig genome from ENSEMBL, albeit different release versions of ENSEMBL (V97 vs V107) and used different alignment functions. This shouldn't be an issue, though we'll do a quick check just in case. 
+
+pigBAL
+(cellranger-7.0.0) using default parameters and Sus scrofa genome (genome assembly 11.1, Ensembl release 107).
+Pirbright pigs
+
+pigPBMC
+Sscrofa 11.1 (V97; http://ftp.ensembl.org/pub/release-97/fasta/sus_scrofa/dna/) and annotation GTF (v11.1.97; http://ftp.ensembl.org/pub/release-97/gtf/sus_scrofa/)
+custom Perl scripts
+Large White and Landrace pigs
+
+Incidentally, both Landrace and Large White pigs were included in the nine breeds used to generate genome assembly 11.1, Pirbright pigs were not. 
+
+```{r check-initial-shared-genes}
+BAL_genes <- rowData(pigBALsce)$hgnc_symbol
+PBMC_genes <- rownames(pigPBMC@assays$RNA@counts)
+# % BAL genes in PBMC
+sum(BAL_genes %in% PBMC_genes)/nrow(pigBALsce)
+# % PBMC genes in BAL
+sum(PBMC_genes %in% BAL_genes)/nrow(pigPBMC)
+
+# Quick check to see if ENSEMBL IDs work better
+sum(rownames(pigBALsce) %in% rownames(pigPBMC@assays$RNA@counts)/length(rownames(pigBALsce)))
+
+```
+56% and 68% shared genes, not great but not a disaster either. Lets see if there's a a trend in the genes not shared. 
+
+```{r check-unshared-genes}
+length(BAL_genes[(BAL_genes %in% PBMC_genes)])
+
+head(BAL_genes[!(BAL_genes %in% PBMC_genes)], n=50)
+
+head(PBMC_genes[!(PBMC_genes %in% BAL_genes)], n=50)
+
+# Quick check to see if ENS IDs have been updated with new ENSEMBL releases
+old_ENS <- grep('ENS', PBMC_genes[!(PBMC_genes %in% BAL_genes)], value=TRUE)
+```
+Cross checked using ENSEMBL ID history checker, IDs are all fine. They shouldn't have been altered by ENSEMBL releases, only new genome builds (both datasets have same genome). 
+
+BAL gene annotations (for HGNC) include "" where there are no HGNC symbols. PBMC gene annotations are a mix of ENSEMBL IDs and HGNC symbols (single slot). This may be the cause of the problem. 
+
+Next we'll try updating the HGNC symbols for both datasets, otherwise we'll need to try realignment.  
+
+**Note:this chunk exports and imports the workload elsewhere so I could get a faster internet connection.**
+```{r update-HGNC}
+save(BAL_genes, file = 'Data/BAL_genes.RData')
+save(PBMC_genes, file = 'Data/PBMC_genes.RData')
+##Ran elsewhere
+#new_symbols_BAL <- UpdateSymbolList(symbols = BAL_genes)
+#save(new_symbols_BAL, file = 'Data/new_symbols_BAL.RData')
+#new_symbols_PBMC <- UpdateSymbolList(symbols = PBMC_genes)
+#save(new_symbols_PBMC, file = 'Data/new_symbols_PBMC.RData')
+##Load results
+load('Data/new_symbols_BAL.RData')
+load('Data/new_symbols_PBMC.RData')
+# Recheck genes shared
+# % BAL genes in PBMC
+sum(new_symbols_BAL %in% new_symbols_PBMC)/length(new_symbols_BAL)
+# % PBMC genes in BAL
+sum(new_symbols_PBMC %in% new_symbols_BAL)/length(new_symbols_PBMC)
+
+#Some genes have been deleted, has this shifted placement?
+tail(BAL_genes, 10)
+tail(new_symbols_BAL, 10)
+tail(PBMC_genes, 10)
+tail(new_symbols_PBMC, 10)
+```
+136 and 326 genes replaced respectively. 57% and 69% genes now shared, a marginal (1%) improvement by updating the HGNC symbols. The updated symbol lists however are shorter than the originals, by a total of 6 genes, order of the genes appears the same. However I don't trust that the loss of six genes may have shifted the alignment with the original objects, hence I won't be using the updated HGNC symbols despite the 1% improvement. 
+
+Another option is to combine the ENSEMBL IDs with HGNC symbols in the BAL dataset, to mimic the PBMCs. 
+```{r mix-HGNC-with-ENSEMBL-for-BAL}
+library(foreach)
+library(doParallel)
+#Assuming more than 2 cores, leaving 2 cores free
+numCores <- detectCores(logical=FALSE) -2
+registerDoParallel(numCores) 
+
+BAL_genes_mix <- vector("list", length(rownames(pigBALsce)))
+
+BAL_genes_mix <- foreach (n=1:length(rownames(pigBALsce))) %dopar%{
+  if(rowData(pigBALsce)$hgnc_symbol[n]==""){
+    BAL_genes_mix[n] <- rownames(pigBALsce)[n]
+  } else {
+    BAL_genes_mix[n] <- rowData(pigBALsce)$hgnc_symbol[n]
+  }}
+stopImplicitCluster()
+
+BAL_genes_mix <- as.character(BAL_genes_mix)
+
+# % BAL genes in PBMC
+sum(BAL_genes_mix %in% PBMC_genes)/nrow(pigBALsce)
+# % PBMC genes in BAL
+sum(PBMC_genes %in% BAL_genes_mix)/nrow(pigPBMC)
+
+# Now we can try updating the BAL genes again (run elsewhere again)
+#updated_BAL_genes_mix <- UpdateSymbolList(symbols = BAL_genes_mix)
+#save(updated_BAL_genes_mix, file='Data/updated_BAL_genes_mix.RData')
+load('Data/updated_BAL_genes_mix.RData')
+
+# % BAL genes in PBMC
+sum(updated_BAL_genes_mix %in% new_symbols_PBMC)/length(updated_BAL_genes_mix)
+# % PBMC genes in BAL
+sum(new_symbols_PBMC %in% updated_BAL_genes_mix)/length(new_symbols_PBMC)
+```
+63% and 76% genes shared using the mixed BAL gene list, so this has improved by 8% (an extra 1200genes).
+
+Updated HGNC symbols provides 64% and 77% shared genes (almost 1% improvement). However once again updating the HGNC symbols has deleted four genes, therefore I won't be using the updated gene list. 
+
+# Quick check of HVGs
+```{r HVG-check}
+rownames(pigBALsce) <- BAL_genes_mix
+top_HVGs_BAL <- getTopHVGs(pigBALsce, n=1000)
+pigPBMC <- FindVariableFeatures(pigPBMC, nfeatures=1000)
+top_HVGs_PBMC <- VariableFeatures(pigPBMC)
+
+sum(top_HVGs_BAL %in% top_HVGs_PBMC)/length(top_HVGs_BAL)
+sum(top_HVGs_PBMC %in% top_HVGs_BAL)/length(top_HVGs_PBMC)
+```
+Only 14% shared HGVs, not great but we'll see if it poses an issue later. 
+
+# Standardisation for scmap
+The first analysis we will be running is scmap, which requires that both datasets are sce, that data is stored in specific named slots and that some slots are cleared. 
+
+```{r create-scmap-compatible-sce}
+# Remove forbidden rowData names (for generation of CompressedGRangesList)
+names(rowData(pigBALsce))[which(names(rowData(pigBALsce))=="start")]="gene_start"
+names(rowData(pigBALsce))[which(names(rowData(pigBALsce))=="end")]="gene_end"
+
+# Add slots to BAL
+rowData(pigBALsce)$feature_symbol <- BAL_genes_mix
+colData(pigBALsce)$cell_type1 <- pigBALsce$cluster
+
+# Create PBMC sce from seurat object
+pigPBMCsce <- as.SingleCellExperiment(pigPBMC)
+
+# Add PBMC slots 
+rowData(pigPBMCsce)$feature_symbol <- rownames(pigPBMC@assays$RNA@counts)
+colData(pigPBMCsce)$cell_type1 <- as.character(pigPBMC$seurat_clusters)
+
+# Remove genes with zero expression
+pigBALsce = pigBALsce[rowSums(counts(pigBALsce)) != 0, ]
+pigPBMCsce = pigPBMCsce[rowSums(counts(pigPBMCsce)) != 0, ]
+
+# Restrict both datasets to shared genes only
+length(rownames(pigBALsce))
+pigBALsce <- pigBALsce[rowData(pigBALsce)$feature_symbol %in% rowData(pigPBMCsce)$feature_symbol]
+length(rownames(pigBALsce))
+
+length(rownames(pigPBMCsce))
+pigPBMCsce <- pigPBMCsce[rowData(pigPBMCsce)$feature_symbol %in% rowData(pigBALsce)$feature_symbol]
+length(rownames(pigPBMCsce))
+
+# Create label and colour slots for convenient annotation later
+pigBALsce$verbose_cluster <- paste0('BAL, ', pigBALsce$named_cluster, ', ', pigBALsce$cluster)
+pigPBMCsce$verbose_cluster <- paste0('PBMC, ', pigPBMCsce$celltypes, ', ', pigPBMCsce$seurat_clusters)
+pigBALsce$EXP_celltype <- paste0('BAL, ', pigBALsce$named_cluster)
+pigPBMCsce$EXP_celltype <- paste0('PBMC, ', pigPBMCsce$celltypes)
+
+BAL_colour_list <- vector("list", length(pigBALsce$EXP_celltype))
+unique(pigBALsce$EXP_celltype)
+BAL_colour_list[grep('Macrophages', pigBALsce$EXP_celltype)] <- '#FF9999' #rouge pink
+BAL_colour_list[grep('Monocytes', pigBALsce$EXP_celltype)] <- '#FF3333' #red
+BAL_colour_list[grep('cDCs', pigBALsce$EXP_celltype)] <- '#B233FF' #purple
+BAL_colour_list[grep('Plasma Cells', pigBALsce$EXP_celltype)] <- '#80CEFF' #blue
+BAL_colour_list[grep('B Cells', pigBALsce$EXP_celltype)] <- '#57F9F8' #cyan
+BAL_colour_list[grep('Tregs', pigBALsce$EXP_celltype)] <- '#804F00' #brown
+BAL_colour_list[grep('CD4', pigBALsce$EXP_celltype)] <- '#FFCB80' #light orange
+#BAL_colour_list[grep('Mitotic CD4 T Cells', pigBALsce$EXP_celltype)] <- '#FFF700' #yellow
+BAL_colour_list[grep('CD8', pigBALsce$EXP_celltype)] <- '#C0FF80' #light green
+BAL_colour_list[grep('NK', pigBALsce$EXP_celltype)] <- '#E0FF80' #yellowy green
+BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B2BEB5' #grey
+pigBALsce$colour  <- BAL_colour_list
+
+PBMC_colour_list <- vector("list", length(pigPBMCsce$EXP_celltype))
+unique(pigPBMCsce$EXP_celltype)
+PBMC_colour_list[grep('Monocytes', pigPBMCsce$EXP_celltype)] <- '#BF2626' # dark red
+PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#63009F' # dark purple
+PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#F999FF' # pink
+PBMC_colour_list[grep('ASC', pigPBMCsce$EXP_celltype)] <- '#415ABB' # dark blue
+PBMC_colour_list[grep('B cells', pigPBMCsce$EXP_celltype)] <- '#41BBBA' # greeny-cyan
+PBMC_colour_list[grep('CD4+', pigPBMCsce$EXP_celltype)] <- '#FF8E00' # deep orange
+PBMC_colour_list[grep('CD8', pigPBMCsce$EXP_celltype)] <- '#80FF00' # green
+PBMC_colour_list[grep('NK cells', pigPBMCsce$EXP_celltype)] <- '#00BF8F' # dark cyan
+PBMC_colour_list[grep('CD2', pigPBMCsce$EXP_celltype)] <- '#509F00' # dark green
+PBMC_colour_list[sapply(PBMC_colour_list, is.null)] <- '#000000' #black
+pigPBMCsce$colour <- PBMC_colour_list
+
+# Select gene features for scmap
+rownames(pigPBMCsce) <- rowData(pigPBMCsce)$feature_symbol
+rownames(pigBALsce) <- rowData(pigBALsce)$feature_symbol
+
+BAL_feature_genes <- findMarkers(pigBALsce, groups=colData(pigBALsce)$cell_type1)
+PBMC_feature_genes <- findMarkers(pigPBMCsce, groups=colData(pigPBMCsce)$cell_type1)
+
+cutoff <- 50
+
+BAL_gene_shortlist <- NULL
+BAL_gene_longlist <- NULL
+BAL_cluster_shortlist <- NULL
+for (n in 1:length(BAL_feature_genes)){
+  top_genes <- rownames(BAL_feature_genes[[n]])[1:cutoff]
+  more_top_genes <- rownames(BAL_feature_genes[[n]])[1:100]
+  BAL_gene_shortlist <- c(BAL_gene_shortlist, top_genes)
+  BAL_gene_longlist <- c(BAL_gene_longlist, more_top_genes)
+  cluster_list <- rep(names(BAL_feature_genes)[n], length(top_genes))
+  BAL_cluster_shortlist <- c(BAL_cluster_shortlist, cluster_list)
+}
+BAL_feature_genes_df <- data.frame(matrix(NA, nrow = cutoff*length(BAL_feature_genes), ncol = 2))
+colnames(BAL_feature_genes_df) <- c('cluster', 'top_genes')
+BAL_feature_genes_df$cluster <- BAL_cluster_shortlist
+BAL_feature_genes_df$top_genes <- BAL_gene_shortlist
+BAL_gene_shortlist <- unique(BAL_gene_shortlist)
+BAL_gene_longlist <- unique(BAL_gene_longlist)
+
+PBMC_gene_shortlist <- NULL
+PBMC_gene_longlist <- NULL
+PBMC_cluster_shortlist <- NULL
+for (n in 1:length(PBMC_feature_genes)){
+  top_genes <- rownames(PBMC_feature_genes[[n]])[1:cutoff]
+  more_top_genes <- rownames(PBMC_feature_genes[[n]])[1:100]
+  PBMC_gene_shortlist <- c(PBMC_gene_shortlist, top_genes)
+  PBMC_gene_longlist <- c(PBMC_gene_longlist, more_top_genes)
+  cluster_list <- rep(names(PBMC_feature_genes)[n], length(top_genes))
+  PBMC_cluster_shortlist <- c(PBMC_cluster_shortlist, cluster_list)  
+}
+PBMC_feature_genes_df <- data.frame(matrix(NA, nrow = cutoff*length(PBMC_feature_genes), ncol = 2))
+colnames(PBMC_feature_genes_df) <- c('cluster', 'top_genes')
+PBMC_feature_genes_df$cluster <- PBMC_cluster_shortlist
+PBMC_feature_genes_df$top_genes <- PBMC_gene_shortlist
+PBMC_gene_shortlist <- unique(PBMC_gene_shortlist)
+PBMC_gene_longlist <- unique(PBMC_gene_longlist)
+```
+
+```{r visualise-new-sce-data}
+#Sanity check, visualise the converted data, attempt to recreate published visuals
+set.seed(123)
+pigPBMCsce <- fixedPCA(pigPBMCsce, subset.row=NULL)
+pigPBMCsce <- runUMAP(pigPBMCsce, dimred='PCA', n_dimred = 1:10, n_neighbors=20)
+#UMAPs
+plotUMAP(pigPBMCsce, colour_by="seurat_clusters", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+plotUMAP(pigPBMCsce, colour_by="celltypes", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+# Highlight T cells, check if correct annotation
+plotUMAP(pigPBMCsce, colour_by="CD3E", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+# Highlight monocytes, check if correct annotation
+plotUMAP(pigPBMCsce, colour_by="CD14", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+# Highlight B cells, check if correct annotation
+plotUMAP(pigPBMCsce, colour_by="CD19", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+```
+Plots aren't the cleanest in terms of cluster localisation (compared to published), however CD3E, CD14 and CD19 appear to localise to the correct cell types, so the conversion hasn't broken anything and we're okay to move on. 
+
+```{r cell-type-save}
+save(list=ls(), file='Data/CellTypeSave.RData') 
+```
+
+# scmap BAL cluster to PBMC cluster
+select features on BAL
+```{r select-features-BAL-clusters}
+pigBALsce <- setFeatures(pigBALsce, BAL_gene_shortlist)
+```
+index on BAL
+```{r BAL-cluster-index}
+pigBALsce <- indexCluster(pigBALsce)
+```
+select features on PBMC
+```{r select-features-PBMC-clusters}
+pigPBMCsce <- setFeatures(pigPBMCsce, PBMC_gene_shortlist)
+```
+index on PBMC
+```{r PBMC-cluster-index}
+pigPBMCsce <- indexCluster(pigPBMCsce)
+```
+project data
+```{r cluster-cluster-projection}
+clusterBAL_to_clusterPBMC <- scmapCluster(
+  projection = pigBALsce,
+  index_list = list(pigPBMCsce = metadata(pigPBMCsce)$scmap_cluster_index),
+  threshold = 0.7
+)
+```
+create table
+```{r cluster-cluster-tables}
+cluster_clusterBAL_proj_table <- table(colData(pigBALsce)$cell_type1, clusterBAL_to_clusterPBMC$scmap_cluster_labs)
+cluster_clusterBAL_proj_table
+write.csv(cluster_clusterBAL_proj_table, file='Data/cluster-clusterBAL_projection.csv')
+
+# Make percentage table
+cluster_clusterBAL_percent_proj_table <- round(prop.table(cluster_clusterBAL_proj_table, margin=1),2)
+cluster_clusterBAL_percent_proj_table
+write.csv(cluster_clusterBAL_percent_proj_table, file='Data/cluster-clusterBAL_percent_projection.csv')
+```
+plot quick sankey
+```{r cluster-cluster-sankey}
+plot(getSankey(colData(pigBALsce)$cell_type1,  clusterBAL_to_clusterPBMC$scmap_cluster_labs[,1], colors=c('#FF0000', '#FF9900', '#99FF00', '#00FF99', '#0099FF', '#0000FF', '#9900FF',  '#FF0099')))
+```
+
+cluster to cluster works really well, better than any of the cell type implementations. May be better to only use cluster to cluster mapping and then annotate with defined cell types. 
+
+# Annotate and truncate cluster to cluster mapping table, prep for networkD3 sankey
+
+```{r map-table-visual}
+map_table <- cluster_clusterBAL_proj_table
+# re-order
+map_table <- map_table[order(rownames(map_table), decreasing = FALSE), ]
+map_table <- map_table[, order(colnames(map_table), decreasing = FALSE)]
+
+#rename BAL
+BAL_clusters <- unique(data.frame(pigBALsce$cluster, pigBALsce$named_cluster))
+BAL_clusters <- BAL_clusters[match(rownames(map_table), BAL_clusters$pigBALsce.cluster),]
+
+if(identical(rownames(map_table), BAL_clusters$pigBALsce.cluster) == FALSE){
+  stop("BAL names not identical")
+}
+BAL_names <- paste0(BAL_clusters$pigBALsce.named_cluster, ', ', BAL_clusters$pigBALsce.cluster)
+rownames(map_table) <- BAL_names
+
+#rename PBMC
+PBMC_clusters <- unique(data.frame(as.character(pigPBMCsce$seurat_clusters), as.character(pigPBMCsce$celltypes)))
+PBMC_clusters <- PBMC_clusters[match(colnames(map_table), PBMC_clusters$as.character.pigPBMCsce.seurat_clusters),]
+PBMC_clusters[is.na(PBMC_clusters)] <- 'unassigned'
+
+if(identical(colnames(map_table), PBMC_clusters$as.character.pigPBMCsce.seurat_clusters) == FALSE){
+  stop("PBMC names not identical")
+}
+PBMC_names <- paste0(PBMC_clusters$as.character.pigPBMCsce.celltypes, ', ', PBMC_clusters$as.character.pigPBMCsce.seurat_clusters)
+colnames(map_table) <- PBMC_names
+
+# re-order, now with new names
+map_table <- map_table[order(rownames(map_table), decreasing = FALSE), ]
+map_table <- map_table[, order(colnames(map_table), decreasing = FALSE)]
+write.csv(map_table, file='Results/cluster_projection_counts.csv')
+
+# as percentage
+map_percent_table <- round(prop.table(map_table, margin=1),2)
+write.csv(map_percent_table, file='Results/cluster_projection_percent.csv')
+
+# Prep for sankey
+map_dataframe <- data.frame(map_percent_table)
+# Trim flow, remove values below 5%
+map_dataframe <- map_dataframe[map_dataframe$Freq > 0.15, ]
+
+```
+
+# Create combined sankey
+percentage based may be better for plotting cluster-cluster
+
+```{r networkD3-sankey}
+library(networkD3)
+library(dplyr)
+ 
+# connection data frame
+links <- data.frame(
+  source=map_dataframe$Var1, 
+  target=map_dataframe$Var2, 
+  value=map_dataframe$Freq
+  )
+ 
+# node data frame
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+# Group nodes by cell type
+grouplist <- vector("list", length(nodes$name))
+
+grouplist[grep('Plasma Cells', nodes$name)] <- 'a'
+grouplist[grep('ASC', nodes$name)] <- 'a'
+grouplist[grep('B Cells', nodes$name)] <- 'a'
+grouplist[grep('B cells', nodes$name)] <- 'a'
+grouplist[grep('CD4', nodes$name)] <- 'b'
+grouplist[grep('Tregs', nodes$name)] <- 'b'
+grouplist[grep('CD8', nodes$name)] <- 'c'
+grouplist[grep('NK', nodes$name)] <- 'c'
+grouplist[grep('Monocytes', nodes$name)] <- 'd'
+grouplist[grep('Macrophages', nodes$name)] <- 'd'
+grouplist[grep('DCs', nodes$name)] <- 'd'
+grouplist[grep('CD2', nodes$name)] <- 'f'
+grouplist[sapply(grouplist, is.null)] <- 'e'
+
+nodes$group <- grouplist
+
+# Group links by cell type
+grouplist2 <- vector("list", length(links$source))
+
+grouplist2[grep('Plasma Cells', links$source)] <- 'a'
+grouplist2[grep('ASC', links$source)] <- 'a'
+grouplist2[grep('B Cells', links$source)] <- 'a'
+grouplist2[grep('B cells', links$source)] <- 'a'
+grouplist2[grep('CD4', links$source)] <- 'b'
+grouplist2[grep('Tregs', links$source)] <- 'b'
+grouplist2[grep('CD8', links$source)] <- 'c'
+grouplist2[grep('NK', links$source)] <- 'c'
+grouplist2[grep('Monocytes', links$source)] <- 'd'
+grouplist2[grep('Macrophages', links$source)] <- 'd'
+grouplist2[grep('DCs', links$source)] <- 'd'
+grouplist2[sapply(grouplist2, is.null)] <- 'e'
+
+links$group <- grouplist2
+
+# Give each group a colour
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f"])'
+
+# convert names to IDs
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sanPlot <- sankeyNetwork(Links = links, Nodes = nodes,
+              Source = "IDsource", Target = "IDtarget",
+              Value = "value", NodeID = "name",
+              colourScale=my_color, LinkGroup="group", NodeGroup="group",
+              fontFamily = "arial", fontSize = 8, nodeWidth = 8,
+              sinksRight=FALSE)
+sanPlot
+
+htmltools::save_html(sanPlot, file = "Results/cluster_map_sankey.html")
+```
+
+
+# Identify key mapping genes
+Use original gene counts (of selected features), subset by interesting comparisons (cell-types), sort, and plot as heatmaps. Also rank mapping genes by similarity. 
+```{r identify-map-genes}
+# Create function to rank genes by similar means
+cal_cor <- function(BAL1, PBMC1){
+  genes <- rownames(BAL1)
+  BAL_subs <- unique(BAL1$verbose_cluster)
+  PBMC_subs <- unique(PBMC1$verbose_cluster)
+  cor_table <- data.frame(rep(0, length(genes)), row.names=genes)
+  for (gene in genes){
+    for (x1 in BAL_subs){
+      for (y1 in PBMC_subs){
+        BAL_subset <- BAL1[rownames(BAL1) == gene, ]
+        BAL_subset <- BAL_subset[, BAL_subset$verbose_cluster == x1]
+        BAL_values <- c(as.matrix(logcounts(BAL_subset)))
+        PBMC_subset <- PBMC1[rownames(PBMC1) == gene, ]
+        PBMC_subset <- PBMC_subset[, PBMC_subset$verbose_cluster == y1]
+        PBMC_values <- c(as.matrix(logcounts(PBMC_subset)))
+        mean_dif <- abs(mean(BAL_values) - mean(PBMC_values))
+        col_name <- paste0(x1, " - ", y1)
+        cor_table[gene, col_name] <- mean_dif
+      }
+    }
+  }
+  cor_table <- cor_table[, -1]
+  return(cor_table)
+}
+
+# Re-order gene names for convenience
+pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
+identical(rownames(pigPBMCsce), rownames(pigBALsce))
+
+library(gplots)
+
+# Everything
+BAL_heat_all <- pigBALsce[rownames(pigBALsce) %in% PBMC_gene_shortlist, ]
+PBMC_heat_all <- pigPBMCsce[rownames(pigPBMCsce) %in% PBMC_gene_shortlist, ]
+identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
+
+BAL_heat_all <- as.matrix(logcounts(aggregateAcrossCells(BAL_heat_all, ids=BAL_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBMC_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
+write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
+
+xAxis <- colnames(heat_all_Matrix)
+xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "red", "blue")
+
+png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
+heatmap.2(heat_all_Matrix, margins=c(30,20), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10))
+dev.off()
+
+# Quick normalisation
+pigBALsce <- computePooledFactors(pigBALsce, clusters=pigBALsce$cluster, assay.type="counts")
+pigBALsce <- logNormCounts(pigBALsce)
+pigPBMCsce <- computePooledFactors(pigPBMCsce, cluster=pigPBMCsce$seurat_clusters, assay.type="counts")
+pigPBMCsce <- logNormCounts(pigPBMCsce)
+
+# B cells
+#B_Cell_genes <- PBMC_feature_genes_df[grep(pattern=c("10|16"), x=PBMC_feature_genes_df$cluster), ]
+#B_Cell_genes <- unique(B_Cell_genes$top_genes)
+B_Cell_genes <- c("ANGPTL1", "SCAP", "ENSSSCG00000033183", "ZBTB32", "BLK", "SNX3", "SMC6", "LTB", "MS4A1", "ENSSSCG00000033721", "RPS3A", "RPS26", "RPS11", "RPL37", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "ITM28", "ANXA1", "TYROB", "CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8")
+
+BAL_B_cells <- pigBALsce[rownames(pigBALsce) %in% B_Cell_genes, ]
+BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
+PBMC_B_cells <- pigPBMCsce[rownames(pigPBMCsce) %in% B_Cell_genes, ]
+PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("10", "16")]
+identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
+
+#B_cells_meandiff <- cal_cor(BAL_B_cells, PBMC_B_cells)
+#write.csv(B_cells_meandiff, file='Results/B_cells_meandiff.csv')
+
+BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
+
+png(filename='Results/B_Cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap(B_Cells_Matrix, margins=c(15,5), Colv=NA, scale="none", keep.dendro = FALSE)
+dev.off()
+
+# CD8 and NK
+#CD8NK_genes <- PBMC_feature_genes_df[grep(pattern=c("1|17|21"), x=PBMC_feature_genes_df$cluster), ]
+#CD8NK_genes <- unique(CD8NK_genes$top_genes)
+CD8NK_genes <- c("PDK1", "NCR1", "PLD4", "EVL", "TCF7", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD74", "S100A6", "ITM2B", "ANXA1", "TYROBP", "TBXAS1", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_CD8NK <- pigBALsce[rownames(pigBALsce) %in% CD8NK_genes, ]
+BAL_CD8NK <- BAL_CD8NK[, BAL_CD8NK$cluster %in% c("9a", "9b", "9c", "21")]
+PBMC_CD8NK <- pigPBMCsce[rownames(pigPBMCsce) %in% CD8NK_genes, ]
+PBMC_CD8NK <- PBMC_CD8NK[, PBMC_CD8NK$seurat_clusters %in% c("1", "17", "21")]
+identical(rownames(PBMC_CD8NK), rownames(BAL_CD8NK))
+
+#CD8NK_meandiff <- cal_cor(BAL_CD8NK, PBMC_CD8NK)
+#write.csv(CD8NK_meandiff, file='Results/CD8NK_meandiff.csv')
+
+BAL_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(BAL_CD8NK, ids=BAL_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
+
+png(filename='Results/CD8NK_Cross_Heatmap.png', height=1080, width=2160)
+heatmap(CD8NK_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+dev.off()
+
+# Mitotic T cells
+#mitotic_genes <- PBMC_feature_genes_df[grep(pattern=c("0|14|28"), x=PBMC_feature_genes_df$cluster), ]
+#mitotic_genes <- unique(mitotic_genes$top_genes)
+mitotic_genes <- c("CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "LCK", "RDX", "ENSSSCG00000029596", "ACTG1", "S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_mitotic <- pigBALsce[rownames(pigBALsce) %in% mitotic_genes, ]
+BAL_mitotic <- BAL_mitotic[, BAL_mitotic$cluster %in% c("18a", "18b")]
+PBMC_mitotic <- pigPBMCsce[rownames(pigPBMCsce) %in% mitotic_genes, ]
+PBMC_mitotic <- PBMC_mitotic[, PBMC_mitotic$seurat_clusters %in% c("0", "14", "28")]
+identical(rownames(PBMC_mitotic), rownames(BAL_mitotic))
+
+#mitotic_meandiff <- cal_cor(BAL_mitotic, PBMC_mitotic)
+#write.csv(mitotic_meandiff, file='Results/mitotic_meandiff.csv')
+
+BAL_mitotic <- as.matrix(logcounts(aggregateAcrossCells(BAL_mitotic, ids=BAL_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
+
+png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap(mitotic_matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+dev.off()
+
+# Conventional T cells
+#T_cell_genes <- PBMC_feature_genes_df[grep(pattern=c("4|14|28"), x=PBMC_feature_genes_df$cluster), ]
+#T_cell_genes <- unique(T_cell_genes$top_genes)
+T_cell_genes <- c("S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "IL6R", "CGA", "CD226", "PDK1", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_T_cell <- pigBALsce[rownames(pigBALsce) %in% T_cell_genes, ]
+BAL_T_cell <- BAL_T_cell[, BAL_T_cell$cluster %in% c("6", "7", "10")]
+PBMC_T_cell <- pigPBMCsce[rownames(pigPBMCsce) %in% T_cell_genes, ]
+PBMC_T_cell <- PBMC_T_cell[, PBMC_T_cell$seurat_clusters %in% c("4", "14", "28")]
+identical(rownames(PBMC_T_cell), rownames(BAL_T_cell))
+
+#T_cell_meandiff <- cal_cor(BAL_T_cell, PBMC_T_cell)
+#write.csv(T_cell_meandiff, file='Results/T_cells_meandiff.csv')
+
+BAL_T_cell <- as.matrix(logcounts(aggregateAcrossCells(BAL_T_cell, ids=BAL_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
+
+png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap(T_Cell_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+dev.off()
+
+```
+
+Checking for GO enrichment
+```{r topGO}
+library(topGO)
+library(org.Ss.eg.db)
+
+# Check BAL unknown 21 against self and against PBMC CD2- GD T cells 21
+PBMC21_genes <- PBMC_feature_genes_df[grep(pattern=c("21"), x=PBMC_feature_genes_df$cluster), ]
+PBMC21_genes <- unique(PBMC21_genes$top_genes)
+PBMC21_genelist <- as.factor(as.numeric(rownames(pigPBMCsce) %in% PBMC21_genes))
+names(PBMC21_genelist) <- rownames(pigPBMCsce)
+
+PBMC21_GO <- new("topGOdata", ontology = "BP", allGenes = PBMC21_genelist, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+PBMC21_GO
+
+resultFisher <- runTest(PBMC21_GO, algorithm = "classic", statistic = "fisher")
+
+resultKS <- runTest(PBMC21_GO, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(PBMC21_GO, algorithm = "elim", statistic = "ks")
+
+PBMC21_GO_Results <- GenTable(PBMC21_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+PBMC21_GO_Results
+
+# All shared feature genes used for mapping
+feature_genelist <- as.factor(as.numeric(rownames(pigPBMCsce) %in% PBMC_gene_shortlist))
+names(feature_genelist) <- rownames(pigPBMCsce)
+
+feature_GO <- new("topGOdata", ontology = "BP", allGenes = feature_genelist, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+feature_GO
+
+resultFisher <- runTest(feature_GO, algorithm = "classic", statistic = "fisher")
+
+resultKS <- runTest(feature_GO, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(feature_GO, algorithm = "elim", statistic = "ks")
+
+feature_GO_Results <- GenTable(feature_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+feature_GO_Results
+
+
+```
+
+Next we'll try mnnCorrect, which corrects for experimental differences to allow for joint or merged analysis. 
+
+save
+```{r cluster-save}
+save(list=ls(), file='Data/ClusterSave.RData') 
+```
+
+# mnnCorrect
+Genes in both datasets need to be in identical order. 
+```{r standardise-for-mnnCorrect}
+pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
+head(rowData(pigBALsce)$feature_symbol, n=10)
+head(rowData(pigPBMCsce)$feature_symbol, n=10)
+tail(rownames(pigBALsce), n=10)
+tail(rownames(pigPBMCsce), n=10)
+identical(rownames(pigPBMCsce), rownames(pigBALsce))
+identical(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol)
+```
+Restricting genes fed to mnnCorrect to improve merging and speed up computation. 
+```{r trim-genes-mnncorrect}
+Union_feature_genes <- paste0(c(BAL_gene_longlist, PBMC_gene_longlist))
+Union_feature_genes <- unique(Union_feature_genes)
+
+BAL_Union_sce <- pigBALsce[rownames(pigBALsce) %in% Union_feature_genes, ]
+PBMC_Union_sce <- pigPBMCsce[rownames(pigPBMCsce) %in% Union_feature_genes, ]
+identical(rownames(BAL_Union_sce), rownames(PBMC_Union_sce))
+```
+
+Run mnnCorrect
+**Warning: this step is compute heavy. Will take several hours to complete.**
+```{r run-mnnCorrect}
+## Trying fast MNN to see how 'fast' it is. Not ideal since it reduces results to a PC space.
+fastmnnCorrected <- fastMNN(logcounts(BAL_Union_sce), logcounts(PBMC_Union_sce), k=20)
+save(fastmnnCorrected, file='Data/fastmnnCorrected_feature100_k20.RData')
+fastmnnCorrected
+#load('Data/fastmnnCorrected.RData')
+mnnCorrected <- mnnCorrect(logcounts(BAL_Union_sce), logcounts(PBMC_Union_sce), k=20)
+save(mnnCorrected, file='Data/mnnCorrected_feature100_k20.RData')
+#load('Data/mnnCorrected_feature100_k20.RData')
+mnnCorrected
+```
+
+Return mnn pairs, evaluate if sufficent number (else adjust k)
+```{r check-mnn-pairs}
+metadata(mnnCorrected)$merge.info
+
+colData(mnnCorrected)
+```
+
+# Joint analysis
+
+```{r joint-TSNE-UMAP}
+# Add labels and colours for visualisation
+verbose_labels <- c(pigBALsce$verbose_cluster, pigPBMCsce$verbose_cluster)
+mnnCorrected$verbose_cluster <- verbose_labels 
+EXP_celltype_labels <- c(pigBALsce$EXP_celltype, pigPBMCsce$EXP_celltype)
+mnnCorrected$EXP_celltype <- EXP_celltype_labels
+colour_labels <- c(pigBALsce$colour, pigPBMCsce$colour)
+mnnCorrected$colour <- colour_labels
+mnnCorrected$batch[mnnCorrected$batch == 1] <- "BAL"
+mnnCorrected$batch[mnnCorrected$batch == 2] <- "PBMC"
+colData(mnnCorrected)
+
+legend_colours <- colour_labels
+names(legend_colours) <- mnnCorrected$EXP_celltype
+legend_colours <- legend_colours[!duplicated(names(legend_colours))]
+legend_colours <- legend_colours[c("BAL, Macrophages", "BAL, Monocytes", "PBMC, Monocytes", "BAL, cDCs", "PBMC, cDCs", "PBMC, pDCs", "BAL, Plasma Cells", "PBMC, ASC", "BAL, B Cells", "PBMC, B cells", "BAL, CD4 T Cells", "PBMC, CD4+ ab T cells", "BAL, Tregs", "BAL, Mitotic CD4 T Cells", "BAL, Mitotic CD8 T Cells", "BAL, CD8 T Cells", "PBMC, CD8ab+ ab T cells", "PBMC, CD8a+ ab T/NK cells", "BAL, NK cells", "PBMC, NK cells", "PBMC, CD2+ GD T cells", "PBMC, CD2- GD T cells", "BAL, T-cell-like", "BAL, Unknown", "PBMC, Unknown", "PBMC, Erythrocytes")]
+
+df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
+names(df_legend_colours) <- c("Cell_Type", "Colour")
+df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
+
+# T cell subset
+mnnCorrected_T_Cells <- mnnCorrected[, mnnCorrected$EXP_celltype %in% c("BAL, CD8 T Cells", "BAL, CD4 T Cells", "BAL, NK cells", "BAL, Tregs", "BAL, Mitotic CD8 T Cells", "BAL, Mitotic CD4 T Cells", "PBMC, CD4+ ab T cells", "PBMC, CD2- GD T cells", "PBMC, CD8a+ ab T/NK cells", "PBMC, CD2+ GD T cells", "PBMC, NK cells", "PBMC, CD8ab+ ab T cells")]
+
+#Calculate UMAPs from PCA
+set.seed(123)
+mnnCorrected <- fixedPCA(mnnCorrected, subset.row=NULL, rank = 20, assay.type='corrected')
+mnnCorrected <- runUMAP(mnnCorrected, dimred='PCA', n_dimred = 1:10, n_neighbors=20)
+
+mnnCorrected_T_Cells <- fixedPCA(mnnCorrected_T_Cells, subset.row=NULL, rank = 20, assay.type='corrected')
+mnnCorrected_T_Cells <- runUMAP(mnnCorrected_T_Cells, dimred='PCA', n_dimred = 1:10, n_neighbors=20)
+
+library(gridExtra)
+
+png(filename='Results/Combined_mnnCorrectedUMAP.png', height=2160, width=4320)
+plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color="A") +
+  scale_color_manual(values = legend_colours) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(-0.35,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 40),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotUMAP(mnnCorrected, point_size=0) +
+  aes(colour = mnnCorrected$colour) +
+  geom_point(shape='.', size=0.3) +
+  geom_text(x=-10, y=8, size=30, label="A", color="black") +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-35), "cm"), text = element_text(size = 40))
+plot2 <- plotUMAP(mnnCorrected, colour_by="batch", point_size=0.3) +
+  theme(legend.position=c(0.1,0.1), legend.direction="vertical") +
+  geom_text(x=-10, y=8, size=30, label="B") +
+  guides(colour = guide_legend(override.aes = list(size=10), title=NULL))+ theme(text = element_text(size = 40)) +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-35), "cm"))
+plot3 <- plotUMAP(mnnCorrected_T_Cells, colour_by="EXP_celltype", point_size=0.3) +
+  theme(legend.position=c(0.5,1.2), legend.direction="vertical") +
+  geom_text(x=-5, y=5, size=30, label="C") +
+  guides(colour = guide_legend(override.aes = list(size=10), title="C", ncol=1))+ theme(text = element_text(size = 40)) +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-110), "cm"))
+grid.arrange(plot1, plot0, plot2, plot3, ncol=2)
+dev.off()
+
+```
+
+# Wrapping up
+
+Save everything
+
+```{r save-everything}
+sessionInfo()
+save(list=ls(), file='Data/mnnCorrectSave.RData') 
+```
