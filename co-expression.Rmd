@@ -293,8 +293,8 @@ plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), 
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, HVG500, infected vs vaccine+adjuvant")
 
 ```
-more HVGs
-```{r trial4}
+more HVGs **compute is too heavy**
+```{r trial4, eval=FALSE}
 genes <- getTopHVGs(sce_all_filt, n=1000)
 dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% genes, ]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "PBS")]
@@ -461,8 +461,8 @@ plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, condition100, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, condition100, infected vs vaccine+adjuvant")
 ```
-try individual cell-types/clusters
-```{r trial7}
+try individual cell-types/clusters, won't run on compute cluster? Runs fine on local...?
+```{r trial7, eval=FALSE}
 # B cells
 cluster_gene_df <- get_cluster_genes(50, genelist=FALSE)
 
@@ -473,7 +473,6 @@ dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% B_Cell_genes, ]
 dataSCE <- dataSCE[, dataSCE$cluster %in% c("12", "16")]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "PBS")]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="diffcoex"), vertex.label = '', main="diffcoex, Bcells, pH1N1")
-#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="ebcoexpress"), vertex.label = '', main="ebcoexpress, Bcells, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, Bcells, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, Bcells, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, Bcells, pH1N1")
@@ -482,7 +481,6 @@ dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% B_Cell_genes, ]
 dataSCE <- dataSCE[, dataSCE$cluster %in% c("12", "16")]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "Ad-HA/NP+Ad-IL1b")]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="diffcoex"), vertex.label = '', main="diffcoex, Bcells, infected vs vaccine+adjuvant")
-#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="ebcoexpress"), vertex.label = '', main="ebcoexpress, Bcells, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, Bcells, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, Bcells, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, Bcells, infected vs vaccine+adjuvant")
@@ -495,7 +493,6 @@ dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% Treg_genes, ]
 dataSCE <- dataSCE[, dataSCE$cluster %in% c("10")]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "PBS")]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="diffcoex"), vertex.label = '', main="diffcoex, Tregs, pH1N1")
-#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="ebcoexpress"), vertex.label = '', main="ebcoexpress, Tregs, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, Tregs, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, Tregs, pH1N1")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, Tregs, pH1N1")
@@ -504,7 +501,6 @@ dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% Treg_genes, ]
 dataSCE <- dataSCE[, dataSCE$cluster %in% c("10")]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "Ad-HA/NP+Ad-IL1b")]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="diffcoex"), vertex.label = '', main="diffcoex, Tregs, infected vs vaccine+adjuvant")
-#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="ebcoexpress"), vertex.label = '', main="ebcoexpress, Tregs, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, Tregs, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, Tregs, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, Tregs, infected vs vaccine+adjuvant")
@@ -517,7 +513,6 @@ dataSCE <- sce_all_filt[rownames(sce_all_filt) %in% macrophage_genes, ]
 dataSCE <- dataSCE[, dataSCE$cluster %in% c("1", "4", "8")]
 dataSCE <- dataSCE[, dataSCE$condition %in% c("pH1N1", "Ad-HA/NP+Ad-IL1b")]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="diffcoex"), vertex.label = '', main="diffcoex, Macrophages, infected vs vaccine+adjuvant")
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="ebcoexpress"), vertex.label = '', main="ebcoexpress, Macrophages, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, Macrophages, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, Macrophages, infected vs vaccine+adjuvant")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, Macrophages, infected vs vaccine+adjuvant")

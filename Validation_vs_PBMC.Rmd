@@ -17,7 +17,7 @@ This script performs a familiarity analysis between the clusters and cell types 
 
 This includes a mix of cell-type mapping, cluster mapping and cell to cell mapping. 
 
-**Note: This script is compute heavy so it is strongly recommended to run on a compute-cluster/workstation with more than 32 GB of memory and at least 16cores. Additionally, this script uses foreach and doParallel which don't play nicely with Windows (Linux and Mac should be fine), if using Windows set numCores=1 or remove foreach with standard for loops.**
+**Note: This script is compute heavy so it is strongly recommended to run on a compute-cluster/workstation with more than 32 GB of memory and at least 16cores. Additionally, this script uses foreach and doParallel which don't play nicely with Windows (Linux and Mac should be fine), if using Windows set numCores=1 or replace foreach with standard for loops.**
 
 # Load packages and data
 pigBALsce is from 'differential all.Rmd'.
@@ -545,8 +545,11 @@ PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBM
 heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
 write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
 
+xAxis <- colnames(heat_all_Matrix)
+xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "red", "blue")
+
 png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
-heatmap.2(heat_all_Matrix, margins=c(30,20), scale="row", col = bluered(100), cexRow=2, cexCol=2,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10)) 
+heatmap.2(heat_all_Matrix, margins=c(30,20), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10))
 dev.off()
 
 # Quick normalisation
@@ -751,6 +754,7 @@ colData(mnnCorrected)
 legend_colours <- colour_labels
 names(legend_colours) <- mnnCorrected$EXP_celltype
 legend_colours <- legend_colours[!duplicated(names(legend_colours))]
+legend_colours <- legend_colours[c("BAL, Macrophages", "BAL, Monocytes", "PBMC, Monocytes", "BAL, cDCs", "PBMC, cDCs", "PBMC, pDCs", "BAL, Plasma Cells", "PBMC, ASC", "BAL, B Cells", "PBMC, B cells", "BAL, CD4 T Cells", "PBMC, CD4+ ab T cells", "BAL, Tregs", "BAL, Mitotic CD4 T Cells", "BAL, Mitotic CD8 T Cells", "BAL, CD8 T Cells", "PBMC, CD8ab+ ab T cells", "PBMC, CD8a+ ab T/NK cells", "BAL, NK cells", "PBMC, NK cells", "PBMC, CD2+ GD T cells", "PBMC, CD2- GD T cells", "BAL, T-cell-like", "BAL, Unknown", "PBMC, Unknown", "PBMC, Erythrocytes")]
 
 df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
 names(df_legend_colours) <- c("Cell_Type", "Colour")
@@ -759,6 +763,7 @@ df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
 # T cell subset
 mnnCorrected_T_Cells <- mnnCorrected[, mnnCorrected$EXP_celltype %in% c("BAL, CD8 T Cells", "BAL, CD4 T Cells", "BAL, NK cells", "BAL, Tregs", "BAL, Mitotic CD8 T Cells", "BAL, Mitotic CD4 T Cells", "PBMC, CD4+ ab T cells", "PBMC, CD2- GD T cells", "PBMC, CD8a+ ab T/NK cells", "PBMC, CD2+ GD T cells", "PBMC, NK cells", "PBMC, CD8ab+ ab T cells")]
 
+#Calculate UMAPs from PCA
 set.seed(123)
 mnnCorrected <- fixedPCA(mnnCorrected, subset.row=NULL, rank = 20, assay.type='corrected')
 mnnCorrected <- runUMAP(mnnCorrected, dimred='PCA', n_dimred = 1:10, n_neighbors=20)
@@ -770,7 +775,7 @@ library(gridExtra)
 
 png(filename='Results/Combined_mnnCorrectedUMAP.png', height=2160, width=4320)
 plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
-  geom_point(aes(y=dummy_data, color=Cell_Type[1]), size=10) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
   labs(x=NULL, y=NULL, color="A") +
   scale_color_manual(values = legend_colours) +
   guides(colour = guide_legend(ncol = 1)) + 
@@ -796,7 +801,6 @@ grid.arrange(plot1, plot0, plot2, plot3, ncol=2)
 dev.off()
 
 ```
-
 
 # Wrapping up
 
