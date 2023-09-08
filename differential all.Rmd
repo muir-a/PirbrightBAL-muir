@@ -199,7 +199,7 @@ sce_filt <- sce_all_corrected
 
 sce_filt <- sce_filt[,!sce_filt$cluster %in% c('5', '17', '11')]
 
-plotUMAP(sce_filt, color_by='cluster')
+plotUMAP(sce_filt, colour_by='cluster')
 
 ```
 
@@ -468,16 +468,67 @@ dev.off()
 
 Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names that can be transposed into figures.
 
-*to be done*
-
 ```{r}
+# Manual annotation revealed that cluster 19 are epithelial cells, so we'll remove them from further analysis
+sce_all_filt <- sce_all_filt[,!sce_all_filt$cluster %in% c('19')]
 
 ## add in cluster names as sce_all_filt$named_cluster
+#Long-form annotated version including cell subtypes
+for (i in unique(sce_all_filt$cluster)){
+ if(any(i==c('7', '20a')))
+    name <- 'CD4 T Cells' 
+ if(any(i==c('18b')))
+    name <- 'Mitotic CD4 T Cells'
+ if(any(i==c('10')))
+    name <- 'Tregs'
+ if(any(i==c('6', '9a', '20b')))
+    name <- 'CD8 T Cells' 
+ if(any(i==c('18a')))
+    name <- 'Mitotic CD8 T Cells'
+ if(any(i==c('1', '4', '8')))
+    name <- 'Macrophages' 
+ if(any(i==c('15')))
+    name <- 'Monocytes'
+ if(any(i==c('13')))
+    name <- 'cDCs'
+ if(any(i==c('2', '3')))
+    name <- 'Plasma Cells' 
+ if(any(i==c('12', '16')))
+    name <- 'B Cells' 
+ if(any(i==c('14')))
+    name <- 'T-cell-like' 
+ if(any(i==c('9b', '9c')))
+    name <- 'NK cells' 
+ if(any(i==c('21')))
+    name <- 'Unknown'
+  sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
+}
+main_clusters <- gsub("a", "", sce_all_filt$cluster)
+main_clusters <- gsub("b", "", main_clusters)
+main_clusters <- gsub("c", "", main_clusters)
+sce_all_filt$main_clusters <- main_clusters
+
+  # Plot new named clusters
+png('Results/UMAP_named_clusters.png', height=1080, width=2160)
+p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+grid.arrange(p1, p2, ncol=2)
+dev.off()
+
+png('Results/UMAP_named_and_numbered_clusters.png', height=2160, width=2160)
+plotUMAP(sce_all_filt, colour_by="named_cluster", text_by="main_clusters", text_size=20, by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=30)))+ theme(text = element_text(size = 40), legend.title=element_blank(), legend.position=c(0.1,0.3))
+dev.off()
+
+#Redo normalization as logcounts now that clusters have been removed
+sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
+sce_all_filt <- logNormCounts(sce_all_filt)
+
+# Update shiny app to filtered data for easier visualization and identification
+sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
+sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
+saveRDS(sce_all_filt, file='shiny_app/data.rds')
 
 ```
-
-
-
 
 # Wrapping up
 
@@ -485,6 +536,7 @@ Save everything
 
 ```{r}
 sessionInfo()
+save(sce_all_filt, file='Data/sce_all_filt.RData')
 save(list=ls(), file='ongoing_full_diff.RData') 
 ```
 
