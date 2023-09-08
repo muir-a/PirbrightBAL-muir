@@ -534,6 +534,7 @@ pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBM
 identical(rownames(pigPBMCsce), rownames(pigBALsce))
 
 library(gplots)
+library(viridis)
 
 # Everything
 BAL_heat_all <- pigBALsce[rownames(pigBALsce) %in% PBMC_gene_shortlist, ]
@@ -577,7 +578,7 @@ PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_
 B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
 
 png(filename='Results/B_Cells_Cross_Heatmap.png', height=1080, width=2160)
-heatmap(B_Cells_Matrix, margins=c(15,5), Colv=NA, scale="none", keep.dendro = FALSE)
+heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(15,15), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
 dev.off()
 
 # CD8 and NK
@@ -599,7 +600,7 @@ PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8N
 CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
 
 png(filename='Results/CD8NK_Cross_Heatmap.png', height=1080, width=2160)
-heatmap(CD8NK_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+heatmap.2(CD8NK_Matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
 dev.off()
 
 # Mitotic T cells
@@ -621,7 +622,7 @@ PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_
 mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
 
 png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=1080, width=2160)
-heatmap(mitotic_matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+heatmap.2(mitotic_matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
 dev.off()
 
 # Conventional T cells
@@ -643,7 +644,7 @@ PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_
 T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
 
 png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=1080, width=2160)
-heatmap(T_Cell_Matrix, margins=c(20,5), Colv=NA, scale="none", keep.dendro = FALSE)
+heatmap.2(T_Cell_Matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
 dev.off()
 
 ```

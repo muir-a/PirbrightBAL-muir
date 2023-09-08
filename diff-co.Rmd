@@ -25,8 +25,6 @@ library(scran)
 library(dcanr)
 library(igraph)
 library(EBcoexpress)
-#library(GeneNet)#ggm dropped for slowness and poor performance
-#library(COSINE)#Not available on the older R version used by compute cluster
 
 set.seed(123)
 ```
@@ -166,6 +164,8 @@ plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"),
 all genes, but only in Tregs
 ```{r Tregs1}
 Tregs_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("10")]
+genes  <- get_condition_genes(1000)
+Tregs_dataSCE <- Tregs_dataSCE[rownames(dataSCE) %in% genes, ]
 # Remove zero genes
 Tregs_dataSCE = Tregs_dataSCE[rowSums(counts(Tregs_dataSCE)) != 0, ]
 
@@ -197,9 +197,68 @@ genes  <- get_condition_genes(1000)
 dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 
 test1 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")
-sub_g = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+sub_g1 = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
 plot(test1, vertex.label = '', main="All genes, all cells, zscore")
-plot(sub_g, vertex.label = '', main="IFI6 1st neighbors")
+plot(sub_g1, vertex.label = '', main="IFI6 1st neighbors, zscore")
+
+test2 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy")
+sub_g2 = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+plot(test1, vertex.label = '', main="All genes, all cells, entropy")
+plot(sub_g2, vertex.label = '', main="IFI6 1st neighbors, entropy")
+
+test3 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic")
+sub_g3 = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+plot(test1, vertex.label = '', main="All genes, all cells, magic")
+plot(sub_g3, vertex.label = '', main="IFI6 1st neighbors, magic")
+
+#Note all methods appear to return same gene neighbors for IFI6
+
+IFI6_neighbors <- names(sub_g1[1])
+
+IFI6_neighbors <- names(sub_g1["IFI6"])
+length(genes)
+length(IFI6_neighbors)
 
 ```
 
+IFI6 1st neighbors in macrophage, T cell and B cell subsets
+```{r IFI6-subsets}
+sub_dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("pH1N1", "PBS")]
+genes  <- get_condition_genes(1000)
+sub_dataSCE <- sub_dataSCE[rownames(sub_dataSCE) %in% genes, ]
+
+dataSCE <- sub_dataSCE[, sub_dataSCE$cluster %in% c("1", "4", "8")]
+test1 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")
+sub_g1 = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+plot(test1, vertex.label = '', main="All genes, macrophages, zscore")
+plot(sub_g1, vertex.label = '', main="IFI6 1st neighbors, macrophages,  zscore")
+
+dataSCE <- sub_dataSCE[, sub_dataSCE$cluster %in% c("12", "16")]
+test2 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")
+sub_g2 = make_ego_graph(test2, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+plot(test2, vertex.label = '', main="All genes, B Cells, zscore")
+plot(sub_g2, vertex.label = '', main="IFI6 1st neighbors, B Cells,  zscore")
+
+dataSCE <- sub_dataSCE[, sub_dataSCE$cluster %in% c("6", "7")]
+test3 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")
+sub_g3 = make_ego_graph(test3, order=1, mode="in", node="IFI6", mindist=0)[[1]]
+plot(test3, vertex.label = '', main="All genes, T Cells, zscore")
+plot(sub_g3, vertex.label = '', main="IFI6 1st neighbors, T Cells,  zscore")
+
+length(names(sub_g1["IFI6"]))
+length(names(sub_g2["IFI6"]))
+length(names(sub_g3["IFI6"]))
+
+sum(names(sub_g1["IFI6"]) %in% names(sub_g2["IFI6"]))/nrow(names(sub_g1["IFI6"]))
+sum(names(sub_g1["IFI6"]) %in% names(sub_g3["IFI6"]))/nrow(names(sub_g1["IFI6"]))
+sum(names(sub_g2["IFI6"]) %in% names(sub_g3["IFI6"]))/nrow(names(sub_g2["IFI6"]))
+```
+
+# Wrapping up
+
+Save everything
+
+```{r}
+sessionInfo()
+save(list=ls(), file='workspace_diff-co.RData') 
+```
