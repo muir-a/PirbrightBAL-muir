@@ -459,10 +459,6 @@ png('Results/UMAP_named_and_numbered_clusters.png', height=2160, width=2160)
 plotUMAP(sce_all_filt, colour_by="named_cluster", text_by="main_clusters", text_size=20, by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=30)))+ theme(text = element_text(size = 40), legend.title=element_blank(), legend.position=c(0.1,0.3))
 dev.off()
 
-#Redo normalization as logcounts now that clusters have been removed
-sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
-sce_all_filt <- logNormCounts(sce_all_filt)
-
 # Update shiny app to filtered data for easier visualization and identification
 sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
