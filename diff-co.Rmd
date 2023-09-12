@@ -34,34 +34,21 @@ Data
 load('Data/sce_all_filt.RData')
 ```
 
-Trim genes to be investigated. Either DE or HVGs. 
+Process for easy annotation, normalisation and batch correction. 
 ```{r gene-lists}
 dim(sce_all_filt)
 unique(sce_all_filt$condition)
+
+#Redo normalization as logcounts now that clusters have been removed
+sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
+sce_all_filt <- logNormCounts(sce_all_filt)
 
 # Remove forbidden rowData names (for generation of CompressedGRangesList)
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="start")]="gene_start"
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="end")]="gene_end"
 
 # Swap ENSEMBL IDs for HGNC where possible for easy visualization
-library(foreach)
-library(doParallel)
-#Assuming more than 2 cores, leaving 2 cores free
-numCores <- detectCores(logical=FALSE) -2
-registerDoParallel(numCores) 
-
-BAL_genes_mix <- vector("list", length(rownames(sce_all_filt)))
-
-BAL_genes_mix <- foreach (n=1:length(rownames(sce_all_filt))) %dopar%{
-  if(rowData(sce_all_filt)$hgnc_symbol[n]==""){
-    BAL_genes_mix[n] <- rownames(sce_all_filt)[n]
-  } else {
-    BAL_genes_mix[n] <- rowData(sce_all_filt)$hgnc_symbol[n]
-  }}
-stopImplicitCluster()
-
-BAL_genes_mix <- as.character(BAL_genes_mix)
-rownames(sce_all_filt) <- BAL_genes_mix
+rownames(sce_all_filt) <- sce_all_filt$Symbol
 
 ```
 
