@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Intro
 
-Following on from 'differential all'(Cross-ref is skipped). This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) with the end goal of revealing putative causal networks. 
+Following on from 'differential all'. This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) with the end goal of revealing putative causal networks. 
 
 **Excess of 240GB of RAM required to run**
 
@@ -22,6 +22,7 @@ Packages
 library(SingleCellExperiment)
 library(scater)
 library(scran)
+library(batchelor)
 library(dcanr)
 library(igraph)
 library(EBcoexpress)
@@ -34,21 +35,33 @@ Data
 load('Data/sce_all_filt.RData')
 ```
 
-Process for easy annotation, normalisation and batch correction. 
-```{r gene-lists}
+Processing; cell subset, normalise, gene subset, batch correction. 
+```{r preprocessing}
 dim(sce_all_filt)
 unique(sce_all_filt$condition)
-
-#Redo normalization as logcounts now that clusters have been removed
-sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
-sce_all_filt <- logNormCounts(sce_all_filt)
 
 # Remove forbidden rowData names (for generation of CompressedGRangesList)
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="start")]="gene_start"
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="end")]="gene_end"
 
+# Restrict to selected cell types
+sce_all_filt <- sce_all_filt[, sce_all_filt$cluster %in% c("1", "4", "8" , "12", "16", "7"," 20a", "10", "18b", "6", "20b", "18a", "9a", "9b", "9c")]
+
+#Redo normalisation as logcounts now that clusters have been removed
+sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
+sce_all_filt <- logNormCounts(sce_all_filt)
+
+# Get top HVGs, batch corrected for sex, subset dataset
+varmod <- modelGeneVar(sce_all_filt, block=sce_all_filt$sex)
+top_HVGs <- getTopHVGs(varmod, n=1000)
+sce_all_filt <- sce_all_filt[rownames(sce_all_filt) %in% top_HVGs, ]
+
+# Batch Correction
+mnnCorrected <- mnnCorrect(sce_all_filt, batch=sce_all_filt$run, k=20)
+assay(sce_all_filt, i="corrected") <- assay(mnnCorrected, i="corrected")
+
 # Swap ENSEMBL IDs for HGNC where possible for easy visualization
-rownames(sce_all_filt) <- sce_all_filt$Symbol
+rownames(sce_all_filt) <- rowData(sce_all_filt)$Symbol
 
 ```
 
@@ -57,9 +70,9 @@ pipelines for quick iteration and comparison of methods
 #custom pipeline function
 createDCnet <- function(emat, condition, dc.method, cor.method='spearman', ...) {
   #compute scores
-  score = dcScore(logcounts(emat), condition, dc.method, cor.method=cor.method, ebcoexpress.useBWMC=FALSE,  ...)
+  score = dcScore(assay(emat, i="corrected"), condition, dc.method, cor.method=cor.method, ebcoexpress.useBWMC=FALSE,  ...)
   #perform statistical test
-  pvals = dcTest(score, as.matrix(logcounts(emat)), condition, ...)
+  pvals = dcTest(score, as.matrix(assay(emat, i="corrected")), condition, ...)
   #adjust tests for multiple testing
   adjp = dcAdjust(pvals, ...)
   #threshold and generate network
@@ -118,41 +131,33 @@ get_condition_genes <- function(cutoff, genelist=TRUE){
 ```
 Edges are coloured based on the score (negative to positive scores are represented using the purple to green gradient of colours).
 
-all genes and cells to get broad overview of networks between conditions **Heavy compute**
+broad overview of networks between conditions
 ```{r broad-view}
-genes  <- get_condition_genes(1000)
-
 dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("pH1N1", "PBS")]
-dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, all cells, PBS vs infected")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, all cells, PBS vs infected")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, all cells, PBS vs infected")
 
 dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("Ad-HA/NP", "PBS")]
-dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, all cells, PBS vs vaccinated")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, all cells, PBS vs vaccinated")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, all cells, PBS vs vaccinated")
 
 dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("Ad-HA/NP+Ad-IL1b", "PBS")]
-dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, all cells, PBS vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, all cells, PBS vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, all cells, PBS vs vaccinated+IL-1b")
 
 dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("Ad-HA/NP+Ad-IL1b", "Ad-HA/NP")]
-dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, all cells, vaccinated vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, all cells, vaccinated vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, all cells, vaccinated vs vaccinated+IL-1b")
 
 ```
 
-all genes, but only in Tregs
+Tregs
 ```{r Tregs1}
 Tregs_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("10")]
-genes  <- get_condition_genes(1000)
-Tregs_dataSCE <- Tregs_dataSCE[rownames(dataSCE) %in% genes, ]
 # Remove zero genes
 Tregs_dataSCE = Tregs_dataSCE[rowSums(counts(Tregs_dataSCE)) != 0, ]
 
@@ -177,11 +182,9 @@ plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), 
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
 ```
 
-all genes, all cells as above, but only visualising 1st neighbors of IFI6
+visualising 1st neighbors of IFI6
 ```{r IFI6}
 dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("pH1N1", "PBS")]
-genes  <- get_condition_genes(1000)
-dataSCE <- dataSCE[rownames(dataSCE) %in% genes, ]
 
 test1 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")
 sub_g1 = make_ego_graph(test1, order=1, mode="in", node="IFI6", mindist=0)[[1]]
@@ -211,8 +214,6 @@ length(IFI6_neighbors)
 IFI6 1st neighbors in macrophage, T cell and B cell subsets
 ```{r IFI6-subsets}
 sub_dataSCE <- sce_all_filt[, sce_all_filt$condition %in% c("pH1N1", "PBS")]
-genes  <- get_condition_genes(1000)
-sub_dataSCE <- sub_dataSCE[rownames(sub_dataSCE) %in% genes, ]
 
 dataSCE <- sub_dataSCE[, sub_dataSCE$cluster %in% c("1", "4", "8")]
 test1 <- createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore")

@@ -46,7 +46,8 @@ OR load workspace from previous session.
 ```{r load-workspace}
 #load('Data/CellTypeSave.RData') #post pre-processing and cell type validation
 #load('Data/ClusterSave.RData') #post scmap cluster mapping
-#load('Data/mnnCorrectSave.RData') #Post mnnCorrection
+#load('Data/mnnCorrectSave.RData') #Post mnnCorrection joint UMAP
+#load('Data/Validation_vs_PBMC_Save.RData') #Everything
 ```
 
 # Basic comparison of datasets
@@ -165,38 +166,21 @@ pigPBMCsce <- pigPBMCsce[rowData(pigPBMCsce)$feature_symbol %in% rowData(pigBALs
 length(rownames(pigPBMCsce))
 
 # Create label and colour slots for convenient annotation later
-pigBALsce$verbose_cluster <- paste0('BAL, ', pigBALsce$named_cluster, ', ', pigBALsce$cluster)
 pigPBMCsce$verbose_cluster <- paste0('PBMC, ', pigPBMCsce$celltypes, ', ', pigPBMCsce$seurat_clusters)
-pigBALsce$EXP_celltype <- paste0('BAL, ', pigBALsce$named_cluster)
 pigPBMCsce$EXP_celltype <- paste0('PBMC, ', pigPBMCsce$celltypes)
-
-BAL_colour_list <- vector("list", length(pigBALsce$EXP_celltype))
-unique(pigBALsce$EXP_celltype)
-BAL_colour_list[grep('Macrophages', pigBALsce$EXP_celltype)] <- '#FF9999' #rouge pink
-BAL_colour_list[grep('Monocytes', pigBALsce$EXP_celltype)] <- '#FF3333' #red
-BAL_colour_list[grep('cDCs', pigBALsce$EXP_celltype)] <- '#B233FF' #purple
-BAL_colour_list[grep('Plasma Cells', pigBALsce$EXP_celltype)] <- '#80CEFF' #blue
-BAL_colour_list[grep('B Cells', pigBALsce$EXP_celltype)] <- '#57F9F8' #cyan
-BAL_colour_list[grep('Tregs', pigBALsce$EXP_celltype)] <- '#804F00' #brown
-BAL_colour_list[grep('CD4', pigBALsce$EXP_celltype)] <- '#FFCB80' #light orange
-#BAL_colour_list[grep('Mitotic CD4 T Cells', pigBALsce$EXP_celltype)] <- '#FFF700' #yellow
-BAL_colour_list[grep('CD8', pigBALsce$EXP_celltype)] <- '#C0FF80' #light green
-BAL_colour_list[grep('NK', pigBALsce$EXP_celltype)] <- '#E0FF80' #yellowy green
-BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B2BEB5' #grey
-pigBALsce$colour  <- BAL_colour_list
 
 PBMC_colour_list <- vector("list", length(pigPBMCsce$EXP_celltype))
 unique(pigPBMCsce$EXP_celltype)
-PBMC_colour_list[grep('Monocytes', pigPBMCsce$EXP_celltype)] <- '#BF2626' # dark red
-PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#63009F' # dark purple
-PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#F999FF' # pink
-PBMC_colour_list[grep('ASC', pigPBMCsce$EXP_celltype)] <- '#415ABB' # dark blue
-PBMC_colour_list[grep('B cells', pigPBMCsce$EXP_celltype)] <- '#41BBBA' # greeny-cyan
-PBMC_colour_list[grep('CD4+', pigPBMCsce$EXP_celltype)] <- '#FF8E00' # deep orange
-PBMC_colour_list[grep('CD8', pigPBMCsce$EXP_celltype)] <- '#80FF00' # green
-PBMC_colour_list[grep('NK cells', pigPBMCsce$EXP_celltype)] <- '#00BF8F' # dark cyan
-PBMC_colour_list[grep('CD2', pigPBMCsce$EXP_celltype)] <- '#509F00' # dark green
-PBMC_colour_list[sapply(PBMC_colour_list, is.null)] <- '#000000' #black
+PBMC_colour_list[grep('Monocytes', pigPBMCsce$EXP_celltype)] <- '#FB9A99' #pink
+PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF99' #pale yellow
+PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#1F78B4' #dark blue
+PBMC_colour_list[grep('ASC', pigPBMCsce$EXP_celltype)] <- '#1F78B4' #dark blue
+PBMC_colour_list[grep('B cells', pigPBMCsce$EXP_celltype)] <- '#A6CEE3' #pale blue
+PBMC_colour_list[grep('CD4+', pigPBMCsce$EXP_celltype)] <- '#B2DF8A' #light green
+PBMC_colour_list[grep('CD8', pigPBMCsce$EXP_celltype)] <- '#33A02C' # green
+PBMC_colour_list[grep('NK cells', pigPBMCsce$EXP_celltype)] <- '#6A3D9A' #purple
+PBMC_colour_list[grep('CD2', pigPBMCsce$EXP_celltype)] <- '#CAB2D6' #light purple
+PBMC_colour_list[sapply(PBMC_colour_list, is.null)] <- '#B15928' #brown
 pigPBMCsce$colour <- PBMC_colour_list
 
 # Set rownames to Symbols for annotation convenience
@@ -219,6 +203,7 @@ for(i in 1:length(BAL_score_genes)){
 names(BAL_feature_genes) <- names(BAL_score_genes)
 
 PBMC_score_genes <- scoreMarkers(pigPBMCsce, groups=colData(pigPBMCsce)$cell_type1, block=colData(pigPBMCsce)$SampleID)
+
 PBMC_feature_genes <- vector("list", length(PBMC_score_genes))
 for(i in 1:length(PBMC_score_genes)){
   PBMC_feature_genes[[i]] <- PBMC_score_genes[[i]][order(PBMC_score_genes[[i]]$mean.logFC.cohen, decreasing=TRUE),]
@@ -372,7 +357,7 @@ write.csv(map_percent_table, file='Results/cluster_projection_percent.csv')
 # Prep for sankey
 map_dataframe <- data.frame(map_percent_table)
 # Trim flow, remove low values for legibility
-map_dataframe <- map_dataframe[map_dataframe$Freq > 0.15, ]
+map_dataframe <- map_dataframe[map_dataframe$Freq > 0.16, ]
 
 ```
 
@@ -400,17 +385,20 @@ grouplist <- vector("list", length(nodes$name))
 
 grouplist[grep('Plasma Cells', nodes$name)] <- 'a'
 grouplist[grep('ASC', nodes$name)] <- 'a'
-grouplist[grep('B Cells', nodes$name)] <- 'a'
-grouplist[grep('B cells', nodes$name)] <- 'a'
-grouplist[grep('CD4', nodes$name)] <- 'b'
-grouplist[grep('Tregs', nodes$name)] <- 'b'
-grouplist[grep('CD8', nodes$name)] <- 'c'
-grouplist[grep('NK', nodes$name)] <- 'c'
-grouplist[grep('Monocytes', nodes$name)] <- 'd'
-grouplist[grep('Macrophages', nodes$name)] <- 'd'
-grouplist[grep('DCs', nodes$name)] <- 'd'
-grouplist[grep('CD2', nodes$name)] <- 'f'
-grouplist[sapply(grouplist, is.null)] <- 'e'
+grouplist[grep('B Cells', nodes$name)] <- 'b'
+grouplist[grep('B cells', nodes$name)] <- 'b'
+grouplist[grep('CD4', nodes$name)] <- 'c'
+grouplist[grep('Tregs', nodes$name)] <- 'd'
+grouplist[grep('NK', nodes$name)] <- 'f'
+grouplist[grep('CD8', nodes$name)] <- 'e'
+grouplist[grep('Mitotic CD4', nodes$name)] <- 'j'
+grouplist[grep('Mitotic CD8', nodes$name)] <- 'k'
+grouplist[grep('Monocytes', nodes$name)] <- 'g'
+grouplist[grep('Macrophages', nodes$name)] <- 'h'
+grouplist[grep('DCs', nodes$name)] <- 'i'
+grouplist[grep('pDCs', nodes$name)] <- 'a'
+grouplist[grep('CD2', nodes$name)] <- 'd'
+grouplist[sapply(grouplist, is.null)] <- 'l'
 
 nodes$group <- grouplist
 
@@ -419,21 +407,25 @@ grouplist2 <- vector("list", length(links$source))
 
 grouplist2[grep('Plasma Cells', links$source)] <- 'a'
 grouplist2[grep('ASC', links$source)] <- 'a'
-grouplist2[grep('B Cells', links$source)] <- 'a'
-grouplist2[grep('B cells', links$source)] <- 'a'
-grouplist2[grep('CD4', links$source)] <- 'b'
-grouplist2[grep('Tregs', links$source)] <- 'b'
-grouplist2[grep('CD8', links$source)] <- 'c'
-grouplist2[grep('NK', links$source)] <- 'c'
-grouplist2[grep('Monocytes', links$source)] <- 'd'
-grouplist2[grep('Macrophages', links$source)] <- 'd'
-grouplist2[grep('DCs', links$source)] <- 'd'
-grouplist2[sapply(grouplist2, is.null)] <- 'e'
+grouplist2[grep('B Cells', links$source)] <- 'b'
+grouplist2[grep('B cells', links$source)] <- 'b'
+grouplist2[grep('CD4', links$source)] <- 'c'
+grouplist2[grep('Tregs', links$source)] <- 'd'
+grouplist2[grep('NK', links$source)] <- 'f'
+grouplist2[grep('CD8', links$source)] <- 'e'
+grouplist2[grep('Mitotic CD4', links$source)] <- 'j'
+grouplist2[grep('Mitotic CD8', links$source)] <- 'k'
+grouplist2[grep('Monocytes', links$source)] <- 'g'
+grouplist2[grep('Macrophages', links$source)] <- 'h'
+grouplist2[grep('DCs', links$source)] <- 'i'
+grouplist2[grep('pDCs', links$source)] <- 'a'
+grouplist2[grep('CD2', links$source)] <- 'd'
+grouplist2[sapply(grouplist2, is.null)] <- 'l'
 
 links$group <- grouplist2
 
 # Give each group a colour
-my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f"])'
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#6A3D9A", "#FB9A99", "#E31A1C", "#FFFF99", "#FDBF6F", "#FF7F00", "#B15928"])'
 
 # convert names to IDs
 links$IDsource <- match(links$source, nodes$name)-1 
@@ -676,12 +668,12 @@ PBMC1 =	D1
 PBMC2 =	D2
 ```{r split-batches}
 #BAL
-BAL_Union_sce_run1 <- BAL_Union_sce[BAL_Union_sce$run == 1]
-BAL_Union_sce_run2 <- BAL_Union_sce[BAL_Union_sce$run == 2]
-BAL_Union_sce_run3 <- BAL_Union_sce[BAL_Union_sce$run == 3]
-BAL_Union_sce_run4 <- BAL_Union_sce[BAL_Union_sce$run == 4]
-BAL_Union_sce_run5 <- BAL_Union_sce[BAL_Union_sce$run == 5]
-BAL_Union_sce_run6 <- BAL_Union_sce[BAL_Union_sce$run == 6]
+BAL_Union_sce_run1 <- BAL_Union_sce[, BAL_Union_sce$run == "run1"]
+BAL_Union_sce_run2 <- BAL_Union_sce[, BAL_Union_sce$run == "run2"]
+BAL_Union_sce_run3 <- BAL_Union_sce[, BAL_Union_sce$run == "run3"]
+BAL_Union_sce_run4 <- BAL_Union_sce[, BAL_Union_sce$run == "run4"]
+BAL_Union_sce_run5 <- BAL_Union_sce[, BAL_Union_sce$run == "run5"]
+BAL_Union_sce_run6 <- BAL_Union_sce[, BAL_Union_sce$run == "run6"]
 
 #PBMC
 PBMC_Union_sce_B <- PBMC_Union_sce[, PBMC_Union_sce$SampleID %in% c("CT230OCT", "CT21NOV")]
@@ -775,11 +767,165 @@ dev.off()
 
 ```
 
+mnncorrect save
+```{r mnncorrect-save}
+save(list=ls(), file='Data/mnnCorrectSave.RData')
+```
+
+Testing scmap on batch corrected data
+```{r batch-correct-scmap}
+corrected_BAL <- mnnCorrect(BAL_Union_sce, batch=BAL_Union_sce$run, k=20)
+corrected_PBMC <- mnnCorrect(PBMC_Union_sce, batch=PBMC_Union_sce$SampleID, k=20)
+
+# Set essential metadata
+rowData(corrected_BAL)$feature_symbol <- rowData(BAL_Union_sce)$feature_symbol
+colData(corrected_BAL)$cell_type1 <- BAL_Union_sce$cell_type1
+
+rowData(corrected_PBMC)$feature_symbol <- rowData(PBMC_Union_sce)$feature_symbol
+colData(corrected_PBMC)$cell_type1 <- PBMC_Union_sce$cell_type1
+
+#select features on BAL
+corrected_BAL <- setFeatures(corrected_BAL, BAL_gene_shortlist)
+
+#index on BAL
+corrected_BAL <- indexCluster(corrected_BAL)
+
+#select features on PBMC
+corrected_PBMC <- setFeatures(corrected_PBMC, PBMC_gene_shortlist)
+
+#index on PBMC
+corrected_PBMC <- indexCluster(corrected_PBMC)
+
+#project data
+corrected_clusterBAL_to_clusterPBMC <- scmapCluster(
+  projection = corrected_BAL,
+  index_list = list(corrected_PBMC = metadata(corrected_PBMC)$scmap_cluster_index),
+  threshold = 0.7
+)
+#make data tables (to be plotted)
+corrected_BAL_proj_table <- table(colData(corrected_BAL)$cell_type1, corrected_clusterBAL_to_clusterPBMC$scmap_cluster_labs)
+# Make percentage table
+corrected_BAL_percent_proj_table <- round(prop.table(corrected_BAL_proj_table, margin=1),2)
+```
+
+make table and plot
+```{r plot-corrected-scmap}
+corrected_map_table <- corrected_BAL_proj_table
+# re-order
+corrected_map_table <- corrected_map_table[order(rownames(corrected_map_table), decreasing = FALSE), ]
+corrected_map_table <- corrected_map_table[, order(colnames(corrected_map_table), decreasing = FALSE)]
+
+#rename BAL
+corrected_BAL_clusters <- unique(data.frame(BAL_Union_sce$cluster, BAL_Union_sce$named_cluster))
+corrected_BAL_clusters <- corrected_BAL_clusters[match(rownames(corrected_map_table), corrected_BAL_clusters$BAL_Union_sce.cluster),]
+
+if(identical(rownames(corrected_map_table), corrected_BAL_clusters$BAL_Union_sce.cluster) == FALSE){
+  stop("BAL names not identical")
+}
+corrected_BAL_names <- paste0(corrected_BAL_clusters$BAL_Union_sce.named_cluster, ', ', corrected_BAL_clusters$BAL_Union_sce.cluster)
+rownames(corrected_map_table) <- corrected_BAL_names
+
+#rename PBMC
+corrected_PBMC_clusters <- unique(data.frame(as.character(PBMC_Union_sce$seurat_clusters), as.character(PBMC_Union_sce$celltypes)))
+corrected_PBMC_clusters <- corrected_PBMC_clusters[match(colnames(map_table), corrected_PBMC_clusters$as.character.PBMC_Union_sce.seurat_clusters),]
+corrected_PBMC_clusters[is.na(corrected_PBMC_clusters)] <- 'unassigned'
+
+if(identical(colnames(corrected_map_table), corrected_PBMC_clusters$as.character.PBMC_Union_sce.seurat_clusters) == FALSE){
+  stop("PBMC names not identical")
+}
+corrected_PBMC_names <- paste0(corrected_PBMC_clusters$as.character.PBMC_Union_sce.celltypes, ', ', corrected_PBMC_clusters$as.character.PBMC_Union_sce.seurat_clusters)
+colnames(corrected_map_table) <- corrected_PBMC_names
+
+# re-order, now with new names
+corrected_map_table <- corrected_map_table[order(rownames(corrected_map_table), decreasing = FALSE), ]
+corrected_map_table <- corrected_map_table[, order(colnames(corrected_map_table), decreasing = FALSE)]
+write.csv(corrected_map_table, file='Results/corrected_cluster_projection_counts.csv')
+
+# as percentage
+corrected_map_percent_table <- round(prop.table(corrected_map_table, margin=1),2)
+write.csv(corrected_map_percent_table, file='Results/corrected_cluster_projection_percent.csv')
+
+# Prep for sankey
+corrected_map_dataframe <- data.frame(corrected_map_percent_table)
+# Trim flow, remove low values for legibility
+corrected_map_dataframe <- corrected_map_dataframe[corrected_map_dataframe$Freq > 0.15, ]
+
+library(networkD3)
+library(dplyr)
+ 
+# connection data frame
+links <- data.frame(
+  source=corrected_map_dataframe$Var1, 
+  target=corrected_map_dataframe$Var2, 
+  value=corrected_map_dataframe$Freq
+  )
+ 
+# node data frame
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+# Group nodes by cell type
+grouplist <- vector("list", length(nodes$name))
+
+grouplist[grep('Plasma Cells', nodes$name)] <- 'a'
+grouplist[grep('ASC', nodes$name)] <- 'a'
+grouplist[grep('B Cells', nodes$name)] <- 'a'
+grouplist[grep('B cells', nodes$name)] <- 'a'
+grouplist[grep('CD4', nodes$name)] <- 'b'
+grouplist[grep('Tregs', nodes$name)] <- 'b'
+grouplist[grep('CD8', nodes$name)] <- 'c'
+grouplist[grep('NK', nodes$name)] <- 'c'
+grouplist[grep('Monocytes', nodes$name)] <- 'd'
+grouplist[grep('Macrophages', nodes$name)] <- 'd'
+grouplist[grep('DCs', nodes$name)] <- 'd'
+grouplist[grep('CD2', nodes$name)] <- 'f'
+grouplist[sapply(grouplist, is.null)] <- 'e'
+
+nodes$group <- grouplist
+
+# Group links by cell type
+grouplist2 <- vector("list", length(links$source))
+
+grouplist2[grep('Plasma Cells', links$source)] <- 'a'
+grouplist2[grep('ASC', links$source)] <- 'a'
+grouplist2[grep('B Cells', links$source)] <- 'a'
+grouplist2[grep('B cells', links$source)] <- 'a'
+grouplist2[grep('CD4', links$source)] <- 'b'
+grouplist2[grep('Tregs', links$source)] <- 'b'
+grouplist2[grep('CD8', links$source)] <- 'c'
+grouplist2[grep('NK', links$source)] <- 'c'
+grouplist2[grep('Monocytes', links$source)] <- 'd'
+grouplist2[grep('Macrophages', links$source)] <- 'd'
+grouplist2[grep('DCs', links$source)] <- 'd'
+grouplist2[sapply(grouplist2, is.null)] <- 'e'
+
+links$group <- grouplist2
+
+# Give each group a colour
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f"])'
+
+# convert names to IDs
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+corrected_sanPlot <- sankeyNetwork(Links = links, Nodes = nodes,
+              Source = "IDsource", Target = "IDtarget",
+              Value = "value", NodeID = "name",
+              colourScale=my_color, LinkGroup="group", NodeGroup="group",
+              fontFamily = "arial", fontSize = 8, nodeWidth = 8,
+              sinksRight=FALSE)
+corrected_sanPlot
+
+htmltools::save_html(corrected_sanPlot, file = "Results/corrected_cluster_map_sankey.html")
+```
+
 # Wrapping up
 
 Save everything
 
 ```{r save-everything}
 sessionInfo()
-save(list=ls(), file='Data/mnnCorrectSave.RData') 
+save(list=ls(), file='Data/Validation_vs_PBMC_Save.RData') 
 ```

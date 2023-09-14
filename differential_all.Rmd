@@ -443,12 +443,41 @@ for (i in unique(sce_all_filt$cluster)){
     name <- 'Unknown'
   sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
 }
+# create 'main_clusters' column that ignores subclustering
 main_clusters <- gsub("a", "", sce_all_filt$cluster)
 main_clusters <- gsub("b", "", main_clusters)
 main_clusters <- gsub("c", "", main_clusters)
 sce_all_filt$main_clusters <- main_clusters
 
-  # Plot new named clusters
+# Create label and colour slots for convenient annotation later
+sce_all_filt$verbose_cluster <- paste0('BAL, ', sce_all_filt$named_cluster, ', ', sce_all_filt$cluster)
+sce_all_filt$EXP_celltype <- paste0('BAL, ', sce_all_filt$named_cluster)
+
+BAL_colour_list <- vector("list", length(sce_all_filt$EXP_celltype))
+BAL_colour_list[grep('Macrophages', sce_all_filt$EXP_celltype)] <- '#E31A1C' #red
+BAL_colour_list[grep('Monocytes', sce_all_filt$EXP_celltype)] <- '#FB9A99' #pink
+BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF99' #pale yellow
+BAL_colour_list[grep('Plasma Cells', sce_all_filt$EXP_celltype)] <- '#1F78B4' #dark blue
+BAL_colour_list[grep('B Cells', sce_all_filt$EXP_celltype)] <- '#A6CEE3' #pale blue
+BAL_colour_list[grep('Tregs', sce_all_filt$EXP_celltype)] <- '#CAB2D6' #light purple
+BAL_colour_list[grep('CD4', sce_all_filt$EXP_celltype)] <- '#B2DF8A' #light green
+BAL_colour_list[grep('Mitotic CD4 T Cells', sce_all_filt$EXP_celltype)] <- '#FDBF6F' #pale orange
+BAL_colour_list[grep('CD8', sce_all_filt$EXP_celltype)] <- '#33A02C' # green
+BAL_colour_list[grep('Mitotic CD8 T Cells', sce_all_filt$EXP_celltype)] <- '#FF7F00' #orange
+BAL_colour_list[grep('NK', sce_all_filt$EXP_celltype)] <- '#6A3D9A' #purple
+BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B15928' #brown
+sce_all_filt$colour  <- BAL_colour_list
+
+legend_colours <- BAL_colour_list
+names(legend_colours) <- sce_all_filt$named_cluster
+legend_colours <- legend_colours[!duplicated(names(legend_colours))]
+legend_colours <- legend_colours[c("Macrophages", "Monocytes", "cDCs", "Plasma Cells", "B Cells", "CD4 T Cells", "Tregs", "Mitotic CD4 T Cells", "Mitotic CD8 T Cells", "CD8 T Cells", "NK cells", "T-cell-like", "Unknown")]
+
+df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
+names(df_legend_colours) <- c("Cell_Type", "Colour")
+df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
+
+# Plot new named clusters
 png('Results/UMAP_named_clusters.png', height=1080, width=2160)
 p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
 p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
@@ -456,7 +485,27 @@ grid.arrange(p1, p2, ncol=2)
 dev.off()
 
 png('Results/UMAP_named_and_numbered_clusters.png', height=2160, width=2160)
-plotUMAP(sce_all_filt, colour_by="named_cluster", text_by="main_clusters", text_size=20, by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=30)))+ theme(text = element_text(size = 40), legend.title=element_blank(), legend.position=c(0.1,0.3))
+plotUMAP(sce_all_filt, colour_by="cluster", text_by="main_clusters", text_size=20, by_exprs_values='reconstructed', point_size=0.3) +
+guides(colour = guide_legend(override.aes = list(size=30)))+ theme(text = element_text(size = 40), legend.title=element_blank(), legend.position=c(0.1,0.3))
+dev.off()
+
+library(gridExtra)
+
+png(filename='Results/UMAP_named_and_numbered_clusters.png', height=1080, width=2160)
+plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color=NULL) +
+  scale_color_manual(values = legend_colours) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotUMAP(sce_all_filt, point_size=0, text_by="main_clusters", text_size=20) +
+  aes(colour = sce_all_filt$colour) +
+  geom_point(shape='.', size=1, alpha=0.5) +
+  geom_text(x=-10, y=8, size=30, label="B", color="black") +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
+grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 
 # Update shiny app to filtered data for easier visualization and identification
