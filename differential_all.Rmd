@@ -142,7 +142,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
 
 ## and print it
 
-pdf('Results/Treg_prop_total.pdf', height=5, width=5)
+pdf('Results/Treg_prop_total.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
   geom_point(aes(col=Sex), position='jitter') +
@@ -163,7 +163,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
 
 ## and print it
 
-pdf('Results/Treg_prop_CD4.pdf', height=5, width=5)
+pdf('Results/Treg_prop_CD4.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
   geom_point(aes(col=Sex), position='jitter') +
@@ -394,7 +394,7 @@ plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_le
 
 library(gridExtra)
 
-pdf('Results/IFI6_pH1N1_egs.pdf', height=5, width=10)
+pdf('Results/IFI6_pH1N1_egs.pdf', height=10, width=20)
 p1 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 6')
 p2 <- plot_resid_gg(y, clust='2', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 2')
 p3 <- plot_resid_gg(y, clust='1', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 1')

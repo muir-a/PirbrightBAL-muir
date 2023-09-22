@@ -45,8 +45,8 @@ pigPBMC <- LoadH5Seurat('Herrera-Uribe/PBMC7_AllCells.h5seurat')
 OR load workspace from previous session. 
 ```{r load-workspace}
 #load('Data/CellTypeSave.RData') #post pre-processing and cell type validation
+#load('Data/ClusterSave.RData') #post scmap cluster mapping
 #load('Data/mnnCorrectSave.RData') #Post mnnCorrection joint UMAP
-#load('Data/sankey_Save.RData') #post scmap cluster mapping
 #load('Data/Validation_vs_PBMC_Save.RData') #Everything
 ```
 
@@ -273,6 +273,370 @@ Plots aren't the cleanest in terms of cluster localisation (compared to publishe
 save(list=ls(), file='Data/CellTypeSave.RData') 
 ```
 
+# scmap BAL cluster to PBMC cluster
+select features on BAL
+```{r select-features-BAL-clusters}
+pigBALsce <- setFeatures(pigBALsce, BAL_gene_shortlist)
+```
+index on BAL
+```{r BAL-cluster-index}
+pigBALsce <- indexCluster(pigBALsce)
+```
+select features on PBMC
+```{r select-features-PBMC-clusters}
+pigPBMCsce <- setFeatures(pigPBMCsce, PBMC_gene_shortlist)
+```
+index on PBMC
+```{r PBMC-cluster-index}
+pigPBMCsce <- indexCluster(pigPBMCsce)
+```
+project data
+```{r cluster-cluster-projection}
+clusterBAL_to_clusterPBMC <- scmapCluster(
+  projection = pigBALsce,
+  index_list = list(pigPBMCsce = metadata(pigPBMCsce)$scmap_cluster_index),
+  threshold = 0.7
+)
+```
+create table
+```{r cluster-cluster-tables}
+cluster_clusterBAL_proj_table <- table(colData(pigBALsce)$cell_type1, clusterBAL_to_clusterPBMC$scmap_cluster_labs)
+cluster_clusterBAL_proj_table
+write.csv(cluster_clusterBAL_proj_table, file='Data/cluster-clusterBAL_projection.csv')
+
+# Make percentage table
+cluster_clusterBAL_percent_proj_table <- round(prop.table(cluster_clusterBAL_proj_table, margin=1),2)
+cluster_clusterBAL_percent_proj_table
+write.csv(cluster_clusterBAL_percent_proj_table, file='Data/cluster-clusterBAL_percent_projection.csv')
+```
+plot quick sankey
+```{r cluster-cluster-sankey}
+plot(getSankey(colData(pigBALsce)$cell_type1,  clusterBAL_to_clusterPBMC$scmap_cluster_labs[,1], colors=c('#FF0000', '#FF9900', '#99FF00', '#00FF99', '#0099FF', '#0000FF', '#9900FF',  '#FF0099')))
+```
+
+cluster to cluster works really well, better than any of the cell type implementations. May be better to only use cluster to cluster mapping and then annotate with defined cell types. 
+
+# Annotate and truncate cluster to cluster mapping table, prep for networkD3 sankey
+
+```{r map-table-visual}
+map_table <- cluster_clusterBAL_proj_table
+# re-order
+map_table <- map_table[order(rownames(map_table), decreasing = FALSE), ]
+map_table <- map_table[, order(colnames(map_table), decreasing = FALSE)]
+
+#rename BAL
+BAL_clusters <- unique(data.frame(pigBALsce$cluster, pigBALsce$named_cluster))
+BAL_clusters <- BAL_clusters[match(rownames(map_table), BAL_clusters$pigBALsce.cluster),]
+
+if(identical(rownames(map_table), BAL_clusters$pigBALsce.cluster) == FALSE){
+  stop("BAL names not identical")
+}
+BAL_names <- paste0(BAL_clusters$pigBALsce.named_cluster, ', ', BAL_clusters$pigBALsce.cluster)
+rownames(map_table) <- BAL_names
+
+#rename PBMC
+PBMC_clusters <- unique(data.frame(as.character(pigPBMCsce$seurat_clusters), as.character(pigPBMCsce$celltypes)))
+PBMC_clusters <- PBMC_clusters[match(colnames(map_table), PBMC_clusters$as.character.pigPBMCsce.seurat_clusters),]
+PBMC_clusters[is.na(PBMC_clusters)] <- 'unassigned'
+
+if(identical(colnames(map_table), PBMC_clusters$as.character.pigPBMCsce.seurat_clusters) == FALSE){
+  stop("PBMC names not identical")
+}
+PBMC_names <- paste0(PBMC_clusters$as.character.pigPBMCsce.celltypes, ', ', PBMC_clusters$as.character.pigPBMCsce.seurat_clusters)
+colnames(map_table) <- PBMC_names
+
+# re-order, now with new names
+map_table <- map_table[order(rownames(map_table), decreasing = FALSE), ]
+map_table <- map_table[, order(colnames(map_table), decreasing = FALSE)]
+write.csv(map_table, file='Results/cluster_projection_counts.csv')
+
+# as percentage
+map_percent_table <- round(prop.table(map_table, margin=1),2)
+write.csv(map_percent_table, file='Results/cluster_projection_percent.csv')
+
+# Prep for sankey
+map_dataframe <- data.frame(map_percent_table)
+# Trim flow, remove low values for legibility
+map_dataframe <- map_dataframe[map_dataframe$Freq > 0.16, ]
+
+```
+
+# Create combined sankey
+percentage based may be better for plotting cluster-cluster
+
+```{r networkD3-sankey}
+library(networkD3)
+library(dplyr)
+ 
+# connection data frame
+links <- data.frame(
+  source=map_dataframe$Var1, 
+  target=map_dataframe$Var2, 
+  value=map_dataframe$Freq
+  )
+ 
+# node data frame
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+# Group nodes by cell type
+grouplist <- vector("list", length(nodes$name))
+
+grouplist[grep('Plasma Cells', nodes$name)] <- 'a'
+grouplist[grep('ASC', nodes$name)] <- 'a'
+grouplist[grep('B Cells', nodes$name)] <- 'b'
+grouplist[grep('B cells', nodes$name)] <- 'b'
+grouplist[grep('CD4', nodes$name)] <- 'c'
+grouplist[grep('Tregs', nodes$name)] <- 'd'
+grouplist[grep('NK', nodes$name)] <- 'f'
+grouplist[grep('CD8', nodes$name)] <- 'e'
+grouplist[grep('Mitotic CD4', nodes$name)] <- 'j'
+grouplist[grep('Mitotic CD8', nodes$name)] <- 'k'
+grouplist[grep('Monocytes', nodes$name)] <- 'g'
+grouplist[grep('Macrophages', nodes$name)] <- 'h'
+grouplist[grep('DCs', nodes$name)] <- 'i'
+grouplist[grep('pDCs', nodes$name)] <- 'a'
+grouplist[grep('CD2', nodes$name)] <- 'd'
+grouplist[sapply(grouplist, is.null)] <- 'l'
+
+nodes$group <- grouplist
+
+# Group links by cell type
+grouplist2 <- vector("list", length(links$source))
+
+grouplist2[grep('Plasma Cells', links$source)] <- 'a'
+grouplist2[grep('ASC', links$source)] <- 'a'
+grouplist2[grep('B Cells', links$source)] <- 'b'
+grouplist2[grep('B cells', links$source)] <- 'b'
+grouplist2[grep('CD4', links$source)] <- 'c'
+grouplist2[grep('Tregs', links$source)] <- 'd'
+grouplist2[grep('NK', links$source)] <- 'f'
+grouplist2[grep('CD8', links$source)] <- 'e'
+grouplist2[grep('Mitotic CD4', links$source)] <- 'j'
+grouplist2[grep('Mitotic CD8', links$source)] <- 'k'
+grouplist2[grep('Monocytes', links$source)] <- 'g'
+grouplist2[grep('Macrophages', links$source)] <- 'h'
+grouplist2[grep('DCs', links$source)] <- 'i'
+grouplist2[grep('pDCs', links$source)] <- 'a'
+grouplist2[grep('CD2', links$source)] <- 'd'
+grouplist2[sapply(grouplist2, is.null)] <- 'l'
+
+links$group <- grouplist2
+
+# Give each group a colour
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#6A3D9A", "#FB9A99", "#E31A1C", "#FFFF99", "#FDBF6F", "#FF7F00", "#B15928"])'
+
+# convert names to IDs
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sanPlot <- sankeyNetwork(Links = links, Nodes = nodes,
+              Source = "IDsource", Target = "IDtarget",
+              Value = "value", NodeID = "name",
+              colourScale=my_color, LinkGroup="group", NodeGroup="group",
+              fontFamily = "arial", fontSize = 8, nodeWidth = 8,
+              sinksRight=FALSE)
+sanPlot
+
+htmltools::save_html(sanPlot, file = "Results/cluster_map_sankey.html")
+```
+
+
+# Identify key mapping genes
+Use original gene counts (of selected features), subset by interesting comparisons (cell-types), sort, and plot as heatmaps. Also rank mapping genes by similarity. 
+```{r identify-map-genes}
+# Create function to rank genes by similar means
+cal_cor <- function(BAL1, PBMC1){
+  genes <- rownames(BAL1)
+  BAL_subs <- unique(BAL1$verbose_cluster)
+  PBMC_subs <- unique(PBMC1$verbose_cluster)
+  cor_table <- data.frame(rep(0, length(genes)), row.names=genes)
+  for (gene in genes){
+    for (x1 in BAL_subs){
+      for (y1 in PBMC_subs){
+        BAL_subset <- BAL1[rownames(BAL1) == gene, ]
+        BAL_subset <- BAL_subset[, BAL_subset$verbose_cluster == x1]
+        BAL_values <- c(as.matrix(logcounts(BAL_subset)))
+        PBMC_subset <- PBMC1[rownames(PBMC1) == gene, ]
+        PBMC_subset <- PBMC_subset[, PBMC_subset$verbose_cluster == y1]
+        PBMC_values <- c(as.matrix(logcounts(PBMC_subset)))
+        mean_dif <- abs(mean(BAL_values) - mean(PBMC_values))
+        col_name <- paste0(x1, " - ", y1)
+        cor_table[gene, col_name] <- mean_dif
+      }
+    }
+  }
+  cor_table <- cor_table[, -1]
+  return(cor_table)
+}
+
+# Re-order gene names for convenience
+pigPBMCsce <- pigPBMCsce[match(rowData(pigBALsce)$feature_symbol, rowData(pigPBMCsce)$feature_symbol),]
+identical(rownames(pigPBMCsce), rownames(pigBALsce))
+
+library(gplots)
+library(viridis)
+
+# Everything
+BAL_heat_all <- pigBALsce[rownames(pigBALsce) %in% PBMC_gene_shortlist, ]
+PBMC_heat_all <- pigPBMCsce[rownames(pigPBMCsce) %in% PBMC_gene_shortlist, ]
+identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
+
+BAL_heat_all <- as.matrix(logcounts(aggregateAcrossCells(BAL_heat_all, ids=BAL_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBMC_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
+write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
+
+xAxis <- colnames(heat_all_Matrix)
+xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "red", "blue")
+colour_df <- rbind(unique(as.data.frame(colData(pigBALsce))[, c("verbose_cluster", "colour")]), unique(as.data.frame(colData(pigPBMCsce))[, c("verbose_cluster", "colour")]))
+colour_df <- colour_df[match(xAxis, colour_df$verbose_cluster),]
+identical(colour_df$verbose_cluster, xAxis)
+Col_Colours <- as.character(colour_df$colour)
+
+png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
+heatmap.2(heat_all_Matrix, margins=c(30,50), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
+dev.off()
+
+# B cells
+#B_Cell_genes <- PBMC_feature_genes_df[grep(pattern=c("10|16"), x=PBMC_feature_genes_df$cluster), ]
+#B_Cell_genes <- unique(B_Cell_genes$top_genes)
+B_Cell_genes <- c("ANGPTL1", "SCAP", "ENSSSCG00000033183", "ZBTB32", "BLK", "SNX3", "SMC6", "LTB", "MS4A1", "ENSSSCG00000033721", "RPS3A", "RPS26", "RPS11", "RPL37", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "ITM28", "ANXA1", "TYROB", "CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8")
+
+BAL_B_cells <- pigBALsce[rownames(pigBALsce) %in% B_Cell_genes, ]
+BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
+PBMC_B_cells <- pigPBMCsce[rownames(pigPBMCsce) %in% B_Cell_genes, ]
+PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("10", "16")]
+identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
+
+#B_cells_meandiff <- cal_cor(BAL_B_cells, PBMC_B_cells)
+#write.csv(B_cells_meandiff, file='Results/B_cells_meandiff.csv')
+
+BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
+
+png(filename='Results/B_Cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(15,15), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
+dev.off()
+
+# CD8 and NK
+#CD8NK_genes <- PBMC_feature_genes_df[grep(pattern=c("1|17|21"), x=PBMC_feature_genes_df$cluster), ]
+#CD8NK_genes <- unique(CD8NK_genes$top_genes)
+CD8NK_genes <- c("PDK1", "NCR1", "PLD4", "EVL", "TCF7", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD74", "S100A6", "ITM2B", "ANXA1", "TYROBP", "TBXAS1", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_CD8NK <- pigBALsce[rownames(pigBALsce) %in% CD8NK_genes, ]
+BAL_CD8NK <- BAL_CD8NK[, BAL_CD8NK$cluster %in% c("9a", "9b", "9c", "21")]
+PBMC_CD8NK <- pigPBMCsce[rownames(pigPBMCsce) %in% CD8NK_genes, ]
+PBMC_CD8NK <- PBMC_CD8NK[, PBMC_CD8NK$seurat_clusters %in% c("1", "17", "21")]
+identical(rownames(PBMC_CD8NK), rownames(BAL_CD8NK))
+
+#CD8NK_meandiff <- cal_cor(BAL_CD8NK, PBMC_CD8NK)
+#write.csv(CD8NK_meandiff, file='Results/CD8NK_meandiff.csv')
+
+BAL_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(BAL_CD8NK, ids=BAL_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
+
+png(filename='Results/CD8NK_Cross_Heatmap.png', height=1080, width=2160)
+heatmap.2(CD8NK_Matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
+dev.off()
+
+# Mitotic T cells
+#mitotic_genes <- PBMC_feature_genes_df[grep(pattern=c("0|14|28"), x=PBMC_feature_genes_df$cluster), ]
+#mitotic_genes <- unique(mitotic_genes$top_genes)
+mitotic_genes <- c("CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "COX17", "ENSSSCG00000001075", "CTSC", "SPCS3", "ENSSSCG00000039071", "SNRPD1", "DUT", "HMGB2", "ENSSSCG00000009327", "LCK", "RDX", "ENSSSCG00000029596", "ACTG1", "S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_mitotic <- pigBALsce[rownames(pigBALsce) %in% mitotic_genes, ]
+BAL_mitotic <- BAL_mitotic[, BAL_mitotic$cluster %in% c("18a", "18b")]
+PBMC_mitotic <- pigPBMCsce[rownames(pigPBMCsce) %in% mitotic_genes, ]
+PBMC_mitotic <- PBMC_mitotic[, PBMC_mitotic$seurat_clusters %in% c("0", "14", "28")]
+identical(rownames(PBMC_mitotic), rownames(BAL_mitotic))
+
+#mitotic_meandiff <- cal_cor(BAL_mitotic, PBMC_mitotic)
+#write.csv(mitotic_meandiff, file='Results/mitotic_meandiff.csv')
+
+BAL_mitotic <- as.matrix(logcounts(aggregateAcrossCells(BAL_mitotic, ids=BAL_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
+
+png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap.2(mitotic_matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
+dev.off()
+
+# Conventional T cells
+#T_cell_genes <- PBMC_feature_genes_df[grep(pattern=c("4|14|28"), x=PBMC_feature_genes_df$cluster), ]
+#T_cell_genes <- unique(T_cell_genes$top_genes)
+T_cell_genes <- c("S100A6", "ENSSSCG00000033721", "ENSSSCG00000014565", "CENPF", "TK1", "LMNB1", "BIRC5", "CENPE", "UHRF1", "UBE2C", "IL6R", "CGA", "CD226", "PDK1", "LCK", "RDX", "ENSSSCG00000029596", "S100A1", "CXCR1", "ENSSSCG00000000640", "ENSSSCG00000023584", "CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3")
+
+BAL_T_cell <- pigBALsce[rownames(pigBALsce) %in% T_cell_genes, ]
+BAL_T_cell <- BAL_T_cell[, BAL_T_cell$cluster %in% c("6", "7", "10")]
+PBMC_T_cell <- pigPBMCsce[rownames(pigPBMCsce) %in% T_cell_genes, ]
+PBMC_T_cell <- PBMC_T_cell[, PBMC_T_cell$seurat_clusters %in% c("4", "14", "28")]
+identical(rownames(PBMC_T_cell), rownames(BAL_T_cell))
+
+#T_cell_meandiff <- cal_cor(BAL_T_cell, PBMC_T_cell)
+#write.csv(T_cell_meandiff, file='Results/T_cells_meandiff.csv')
+
+BAL_T_cell <- as.matrix(logcounts(aggregateAcrossCells(BAL_T_cell, ids=BAL_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
+
+png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=1080, width=2160)
+heatmap.2(T_Cell_Matrix, margins=c(20,15), Colv=FALSE, scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,10), lwid=c(1,10), cexRow=1.5, cexCol=1.5)
+dev.off()
+
+```
+
+Checking for GO enrichment
+```{r topGO}
+library(topGO)
+library(org.Ss.eg.db)
+
+# Check BAL unknown 21 against self and against PBMC CD2- GD T cells 21
+PBMC21_genes <- PBMC_feature_genes_df[grep(pattern=c("21"), x=PBMC_feature_genes_df$cluster), ]
+PBMC21_genes <- unique(PBMC21_genes$top_genes)
+PBMC21_genelist <- as.factor(as.numeric(rownames(pigPBMCsce) %in% PBMC21_genes))
+names(PBMC21_genelist) <- rownames(pigPBMCsce)
+
+PBMC21_GO <- new("topGOdata", ontology = "BP", allGenes = PBMC21_genelist, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+PBMC21_GO
+
+resultFisher <- runTest(PBMC21_GO, algorithm = "classic", statistic = "fisher")
+
+resultKS <- runTest(PBMC21_GO, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(PBMC21_GO, algorithm = "elim", statistic = "ks")
+
+PBMC21_GO_Results <- GenTable(PBMC21_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+PBMC21_GO_Results
+
+# All shared feature genes used for mapping
+feature_genelist <- as.factor(as.numeric(rownames(pigPBMCsce) %in% PBMC_gene_shortlist))
+names(feature_genelist) <- rownames(pigPBMCsce)
+
+feature_GO <- new("topGOdata", ontology = "BP", allGenes = feature_genelist, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+feature_GO
+
+resultFisher <- runTest(feature_GO, algorithm = "classic", statistic = "fisher")
+
+resultKS <- runTest(feature_GO, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(feature_GO, algorithm = "elim", statistic = "ks")
+
+feature_GO_Results <- GenTable(feature_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+feature_GO_Results
+
+
+```
+
+Next we'll try mnnCorrect, which corrects for experimental differences to allow for joint or merged analysis. 
+
+save
+```{r cluster-save}
+save(list=ls(), file='Data/ClusterSave.RData') 
+```
+
 # mnnCorrect
 Genes in both datasets need to be in identical order. 
 ```{r standardise-for-mnnCorrect}
@@ -322,8 +686,13 @@ PBMC_Union_sce_D <- PBMC_Union_sce[, PBMC_Union_sce$SampleID %in% c("PBMC1", "PB
 ```
 
 Run mnnCorrect
-**Warning: this step is compute heavy.**
+**Warning: this step is compute heavy. Will take several hours to complete.**
 ```{r run-mnnCorrect}
+## Trying fast MNN to see how 'fast' it is. Not ideal since it reduces results to a PC space.
+fastmnnCorrected <- fastMNN(logcounts(BAL_Union_sce), logcounts(PBMC_Union_sce), k=20)
+save(fastmnnCorrected, file='Data/fastmnnCorrected_feature50_k20.RData')
+fastmnnCorrected
+#load('Data/fastmnnCorrected.RData')
 mnnCorrected <- mnnCorrect(logcounts(BAL_Union_sce_run1), logcounts(BAL_Union_sce_run2), logcounts(BAL_Union_sce_run3), logcounts(BAL_Union_sce_run4), logcounts(BAL_Union_sce_run5), logcounts(BAL_Union_sce_run6), logcounts(PBMC_Union_sce_B), logcounts(PBMC_Union_sce_C), logcounts(PBMC_Union_sce_D), k=20, merge.order=list(list(1,2,3,4,5,6), list(7,8,9)))
 save(mnnCorrected, file='Data/mnnCorrected_feature50_k20.RData')
 #load('Data/mnnCorrected_feature50_k20.RData')
@@ -407,7 +776,7 @@ mnncorrect save
 save(list=ls(), file='Data/mnnCorrectSave.RData')
 ```
 
-scmap on batch corrected data
+Testing scmap on batch corrected data
 ```{r batch-correct-scmap}
 corrected_BAL <- mnnCorrect(BAL_Union_sce, batch=BAL_Union_sce$run, k=20)
 corrected_PBMC <- mnnCorrect(PBMC_Union_sce, batch=PBMC_Union_sce$SampleID, k=20)
@@ -418,15 +787,9 @@ assay(corrected_PBMC, i='logcounts') <- assay(corrected_PBMC, i='corrected')
 
 rowData(corrected_BAL)$feature_symbol <- rowData(BAL_Union_sce)$feature_symbol
 colData(corrected_BAL)$cell_type1 <- BAL_Union_sce$cell_type1
-colData(corrected_BAL)$verbose_cluster <- BAL_Union_sce$verbose_cluster
-colData(corrected_BAL)$colour <- BAL_Union_sce$colour
-colData(corrected_BAL)$cluster <- BAL_Union_sce$cluster
 
 rowData(corrected_PBMC)$feature_symbol <- rowData(PBMC_Union_sce)$feature_symbol
 colData(corrected_PBMC)$cell_type1 <- PBMC_Union_sce$cell_type1
-colData(corrected_PBMC)$verbose_cluster <- PBMC_Union_sce$verbose_cluster
-colData(corrected_PBMC)$colour <- PBMC_Union_sce$colour
-colData(corrected_PBMC)$seurat_clusters <- PBMC_Union_sce$seurat_clusters
 
 #select features on BAL
 corrected_BAL <- setFeatures(corrected_BAL, BAL_gene_shortlist)
@@ -492,7 +855,7 @@ write.csv(corrected_map_percent_table, file='Results/corrected_cluster_projectio
 # Prep for sankey
 corrected_map_dataframe <- data.frame(corrected_map_percent_table)
 # Trim flow, remove low values for legibility
-corrected_map_dataframe <- corrected_map_dataframe[corrected_map_dataframe$Freq > 0.15, ]
+corrected_map_dataframe <- corrected_map_dataframe[corrected_map_dataframe$Freq > 0.16, ]
 
 library(networkD3)
 library(dplyr)
@@ -570,112 +933,6 @@ corrected_sanPlot <- sankeyNetwork(Links = links, Nodes = nodes,
 corrected_sanPlot
 
 htmltools::save_html(corrected_sanPlot, file = "Results/corrected_cluster_map_sankey.html")
-```
-
-```{r save-sankey}
-sessionInfo()
-save(list=ls(), file='Data/sankey_Save.RData') 
-```
-
-# Heatmaps
-Make heatmaps of interesting subsets 
-```{r heatmaps}
-library(gplots)
-library(viridis)
-
-# Everything
-BAL_heat_all <- corrected_BAL[rownames(corrected_BAL) %in% PBMC_gene_shortlist, ]
-PBMC_heat_all <- corrected_PBMC[rownames(corrected_PBMC) %in% PBMC_gene_shortlist, ]
-identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
-
-BAL_heat_all <- as.matrix(logcounts(aggregateAcrossCells(BAL_heat_all, ids=BAL_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBMC_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
-write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
-
-xAxis <- colnames(heat_all_Matrix)
-xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "blue", "orange")
-colour_df <- rbind(unique(as.data.frame(colData(corrected_BAL))[, c("verbose_cluster", "colour")]), unique(as.data.frame(colData(corrected_PBMC))[, c("verbose_cluster", "colour")]))
-colour_df <- colour_df[match(xAxis, colour_df$verbose_cluster),]
-identical(colour_df$verbose_cluster, xAxis)
-Col_Colours <- as.character(colour_df$colour)
-
-png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
-heatmap.2(heat_all_Matrix, margins=c(30,50), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
-dev.off()
-
-# B cells
-B_Cell_genes <- c("CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8", "ENSSSCG00000015664", "ZBTB32", "HVCN1", "BLK", "PLD4", "CD79B", "ENSSSCG00000040849", "SMC6", "HLA-DRA", "SLA-DQB1", "CD74", "RPL9", "RPL6", "RPS18", "ENSSSCG00000013889", "RPL7A", "ENSSSCG00000011272", "RPS11", "ACTB", "UBB", "RPS23", "ENSSSCG00000014540", "RPS3A", "RPS15", "RPL11", "RPS20", "TMSB10")
-
-BAL_B_cells <- corrected_BAL[rownames(corrected_BAL) %in% B_Cell_genes, ]
-BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
-PBMC_B_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% B_Cell_genes, ]
-PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("8", "16")]
-identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
-
-BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
-
-png(filename='Results/B_Cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
-dev.off()
-
-png(filename='Results/Cross_Heatmap_with_scale.png', height=2160, width=2160)
-heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(15,15), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,9), key=TRUE, keysize=2, density.info='none', key.xlab="mean logcounts")
-dev.off()
-
-# CD8 and NK
-CD8NK_genes <- c("CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "PLVAP", "PRF1", "GPR37", "ENSSSCG00000026217", "ZNF683", "ENSSSCG00000008898", "CD5", "EVL", "CD247", "RHEX", "TRAT1", "NKG7", "GZMB", "CD2", "ENSSSCG00000009327", "SAT1", "LAT", "SH2D1A", "DAPL1")
-
-BAL_CD8NK <- corrected_BAL[rownames(corrected_BAL) %in% CD8NK_genes, ]
-BAL_CD8NK <- BAL_CD8NK[, BAL_CD8NK$cluster %in% c("9a", "9b", "9c", "21")]
-PBMC_CD8NK <- corrected_PBMC[rownames(corrected_PBMC) %in% CD8NK_genes, ]
-PBMC_CD8NK <- PBMC_CD8NK[, PBMC_CD8NK$seurat_clusters %in% c("1", "17", "21")]
-identical(rownames(PBMC_CD8NK), rownames(BAL_CD8NK))
-
-BAL_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(BAL_CD8NK, ids=BAL_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
-
-png(filename='Results/CD8NK_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(CD8NK_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
-dev.off()
-
-# Mitotic T cells
-mitotic_genes <- c("CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "CD5", "EVL", "CD247", "RHEX", "TRAT1", "NKG7", "GZMB", "CD2", "ENSSSCG00000009327", "SAT1", "TK1", "SMC2", "TYMS", "SPC24", "BIRC5", "PCNA", "SMC4", "PCLAF", "TUBA1B", "H2AFZ", "STMN1", "LAT", "SH2D1A", "DAPL1")
-
-BAL_mitotic <- corrected_BAL[rownames(corrected_BAL) %in% mitotic_genes, ]
-BAL_mitotic <- BAL_mitotic[, BAL_mitotic$cluster %in% c("18a", "18b")]
-PBMC_mitotic <- corrected_PBMC[rownames(corrected_PBMC) %in% mitotic_genes, ]
-PBMC_mitotic <- PBMC_mitotic[, PBMC_mitotic$seurat_clusters %in% c("0", "14", "28")]
-identical(rownames(PBMC_mitotic), rownames(BAL_mitotic))
-
-BAL_mitotic <- as.matrix(logcounts(aggregateAcrossCells(BAL_mitotic, ids=BAL_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
-
-png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(mitotic_matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
-dev.off()
-
-# Conventional T cells
-T_cell_genes <- c("CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "CD5", "EVL", "CD247", "RHEX", "TRAT1", "NKG7", "GZMB", "CD2", "ENSSSCG00000009327", "SAT1", "LAT", "SH2D1A", "DAPL1")
-
-BAL_T_cell <- corrected_BAL[rownames(corrected_BAL) %in% T_cell_genes, ]
-BAL_T_cell <- BAL_T_cell[, BAL_T_cell$cluster %in% c("6", "7", "10")]
-PBMC_T_cell <- corrected_PBMC[rownames(corrected_PBMC) %in% T_cell_genes, ]
-PBMC_T_cell <- PBMC_T_cell[, PBMC_T_cell$seurat_clusters %in% c("4", "21", "28")]
-identical(rownames(PBMC_T_cell), rownames(BAL_T_cell))
-
-BAL_T_cell <- as.matrix(logcounts(aggregateAcrossCells(BAL_T_cell, ids=BAL_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
-
-png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(T_Cell_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
-dev.off()
-
 ```
 
 # Wrapping up

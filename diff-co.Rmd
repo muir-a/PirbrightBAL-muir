@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Following on from 'differential all'. This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) with the end goal of revealing putative causal networks. 
 
-**Excess of 240GB of RAM required to run**
+**256GB RAM recommended**
 
 # Load packages and data
 
@@ -35,7 +35,7 @@ Data
 load('Data/sce_all_filt.RData')
 ```
 
-Processing; cell subset, normalise, gene subset, batch correction. 
+Processing; cell subset, normalise, gene subset, batch correction.
 ```{r preprocessing}
 dim(sce_all_filt)
 unique(sce_all_filt$condition)
@@ -63,6 +63,11 @@ assay(sce_all_filt, i="corrected") <- assay(mnnCorrected, i="corrected")
 # Swap ENSEMBL IDs for HGNC where possible for easy visualization
 rownames(sce_all_filt) <- rowData(sce_all_filt)$Symbol
 
+```
+
+save post-processing chunk for convenience
+```{r pre-processing-save}
+save(list=ls(), file='Data/diff-co_prep.RData')
 ```
 
 pipelines for quick iteration and comparison of methods
@@ -162,23 +167,23 @@ Tregs_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("10")]
 Tregs_dataSCE = Tregs_dataSCE[rowSums(counts(Tregs_dataSCE)) != 0, ]
 
 dataSCE <- Tregs_dataSCE[, Tregs_dataSCE$condition %in% c("pH1N1", "PBS")]
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs infected")
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs infected")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs infected")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs infected")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, Tregs, PBS vs infected")
 
 dataSCE <- Tregs_dataSCE[, Tregs_dataSCE$condition %in% c("Ad-HA/NP", "PBS")]
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs vaccinated")
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs vaccinated")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs vaccinated")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs vaccinated")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, Tregs, PBS vs vaccinated")
 
 dataSCE <- Tregs_dataSCE[, Tregs_dataSCE$condition %in% c("Ad-HA/NP+Ad-IL1b", "PBS")]
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs vaccinated+IL-1b")
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs vaccinated+IL-1b")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, PBS vs vaccinated+IL-1b")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, PBS vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, Tregs, PBS vs vaccinated+IL-1b")
 
 dataSCE <- Tregs_dataSCE[, Tregs_dataSCE$condition %in% c("Ad-HA/NP+Ad-IL1b", "Ad-HA/NP")]
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
-plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="entropy"), vertex.label = '', main="entropy, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
+#plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="magic"), vertex.label = '', main="magic, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
 plot(createDCnet(emat=dataSCE, condition=dataSCE$condition, dc.method="zscore"), vertex.label = '', main="zscore, all genes, Tregs, vaccinated vs vaccinated+IL-1b")
 ```
 
@@ -206,7 +211,7 @@ plot(sub_g3, vertex.label = '', main="IFI6 1st neighbors, magic")
 IFI6_neighbors <- names(sub_g1[1])
 
 IFI6_neighbors <- names(sub_g1["IFI6"])
-length(genes)
+length(rownames(sce_all_filt))
 length(IFI6_neighbors)
 
 ```
@@ -237,9 +242,9 @@ length(names(sub_g1["IFI6"]))
 length(names(sub_g2["IFI6"]))
 length(names(sub_g3["IFI6"]))
 
-sum(names(sub_g1["IFI6"]) %in% names(sub_g2["IFI6"]))/nrow(names(sub_g1["IFI6"]))
-sum(names(sub_g1["IFI6"]) %in% names(sub_g3["IFI6"]))/nrow(names(sub_g1["IFI6"]))
-sum(names(sub_g2["IFI6"]) %in% names(sub_g3["IFI6"]))/nrow(names(sub_g2["IFI6"]))
+sum(names(sub_g1["IFI6"]) %in% names(sub_g2["IFI6"]))/length(names(sub_g1["IFI6"]))
+sum(names(sub_g1["IFI6"]) %in% names(sub_g3["IFI6"]))/length(names(sub_g1["IFI6"]))
+sum(names(sub_g2["IFI6"]) %in% names(sub_g3["IFI6"]))/length(names(sub_g2["IFI6"]))
 ```
 
 # Wrapping up
