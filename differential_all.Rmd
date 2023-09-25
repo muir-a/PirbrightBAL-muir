@@ -146,8 +146,9 @@ pdf('Results/Treg_prop_total.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
   geom_point(aes(col=Sex), position='jitter') +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  theme_classic()
+  labs(x=NULL) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 dev.off()
 
 
@@ -167,8 +168,9 @@ pdf('Results/Treg_prop_CD4.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
   geom_point(aes(col=Sex), position='jitter') +
-  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-  theme_classic()
+  labs(x=NULL) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 dev.off()
 
 
@@ -182,10 +184,12 @@ ggplot(props, aes(fill=cluster, y=prop, x=sample)) +
   geom_bar(position='stack', stat='identity')
 
 ## and print it
-pdf('Results/CD4_cluster_proportions.pdf', height=5, width=5)
+pdf('Results/CD4_cluster_proportions.pdf', height=10, width=10)
 ggplot(props, aes(fill=cluster, y=prop, x=sample)) +
   geom_bar(position='stack', stat='identity') +
-  theme_classic()
+  labs(x=NULL, y='proportion') +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 dev.off()
 
 
@@ -370,7 +374,7 @@ plot(IL1b.CD8$logFC, -log10(IL1b.CD8$PValue), col=cols)
 
 IFI6 <- 'ENSSSCG00000034570'
 
-plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_by, gene, ...){
+plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_by, gene, main, ...){
   loggene <- cpm(y, log=TRUE)[gene,y$samples$cluster==clust]
   mod <- lm(loggene~y$samples[y$samples$cluster==clust, regress_out])
   res <- resid(mod)
@@ -380,8 +384,9 @@ plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_
   ggplot(data=tab, aes(x=split, y=res)) +
     geom_boxplot(na.rm=TRUE) +
     geom_point(aes(col=col), position='jitter') +
-    theme(axis.text.x = element_text(angle = 45, hjust=1)) +
-    theme_classic()
+    labs(y="expression", col=col_by, title=main) +
+    theme_classic() +
+    theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 }
 
 y <- DGEList(counts=counts(summed.filt), samples=colData(summed.filt))
@@ -415,33 +420,47 @@ sce_all_filt <- sce_all_filt[,!sce_all_filt$cluster %in% c('19')]
 ## add in cluster names as sce_all_filt$named_cluster
 #Long-form annotated version including cell subtypes
 for (i in unique(sce_all_filt$cluster)){
- if(any(i==c('7', '20a')))
+ if(any(i==c('7', '20a'))){
     name <- 'CD4 T Cells' 
- if(any(i==c('18b')))
+    long_name <- 'CD4 T Cells, 7, 20a'}
+ if(any(i==c('18b'))){
     name <- 'Mitotic CD4 T Cells'
- if(any(i==c('10')))
+    long_name <- 'Mitotic CD4 T Cells, 18b'}
+ if(any(i==c('10'))){
     name <- 'Tregs'
- if(any(i==c('6', '9a', '20b')))
+    long_name <- 'Tregs, 10'}
+ if(any(i==c('6', '9a', '20b'))){
     name <- 'CD8 T Cells' 
- if(any(i==c('18a')))
+    long_name <- 'CD8 T Cells, 6, 9a, 20b'}
+ if(any(i==c('18a'))){
     name <- 'Mitotic CD8 T Cells'
- if(any(i==c('1', '4', '8')))
+    long_name <- 'Mitotic CD8 T Cells, 18a'}
+ if(any(i==c('1', '4', '8'))){
     name <- 'Macrophages' 
- if(any(i==c('15')))
+    long_name <- 'Macrophages, 1, 4, 8'}
+ if(any(i==c('15'))){
     name <- 'Monocytes'
- if(any(i==c('13')))
+    long_name <- 'Monocytes, 15'}
+ if(any(i==c('13'))){
     name <- 'cDCs'
- if(any(i==c('2', '3')))
+    long_name <- 'cDCs, 13'}
+ if(any(i==c('2', '3'))){
     name <- 'Plasma Cells' 
- if(any(i==c('12', '16')))
+    long_name <- 'Plasma Cells, 2, 3'}
+ if(any(i==c('12', '16'))){
     name <- 'B Cells' 
- if(any(i==c('14')))
+    long_name <- 'B Cells, 12, 16'}
+ if(any(i==c('14'))){
     name <- 'T-cell-like' 
- if(any(i==c('9b', '9c')))
+    long_name <- 'T-cell-like, 14'}
+ if(any(i==c('9b', '9c'))){
     name <- 'NK cells' 
- if(any(i==c('21')))
+    long_name <- 'NK cells, 9b, 9c'}
+ if(any(i==c('21'))){
     name <- 'Unknown'
+    long_name <- 'Unknown, 21'}
   sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
+  sce_all_filt$long_named_cluster[sce_all_filt$cluster==i] <- long_name
 }
 # create 'main_clusters' column that ignores subclustering
 main_clusters <- gsub("a", "", sce_all_filt$cluster)
@@ -456,7 +475,7 @@ sce_all_filt$EXP_celltype <- paste0('BAL, ', sce_all_filt$named_cluster)
 BAL_colour_list <- vector("list", length(sce_all_filt$EXP_celltype))
 BAL_colour_list[grep('Macrophages', sce_all_filt$EXP_celltype)] <- '#E31A1C' #red
 BAL_colour_list[grep('Monocytes', sce_all_filt$EXP_celltype)] <- '#FB9A99' #pink
-BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF99' #pale yellow
+BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF00' #yellow
 BAL_colour_list[grep('Plasma Cells', sce_all_filt$EXP_celltype)] <- '#1F78B4' #dark blue
 BAL_colour_list[grep('B Cells', sce_all_filt$EXP_celltype)] <- '#A6CEE3' #pale blue
 BAL_colour_list[grep('Tregs', sce_all_filt$EXP_celltype)] <- '#CAB2D6' #light purple
@@ -469,13 +488,15 @@ BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B15928' #brown
 sce_all_filt$colour  <- BAL_colour_list
 
 legend_colours <- BAL_colour_list
-names(legend_colours) <- sce_all_filt$named_cluster
+names(legend_colours) <- sce_all_filt$long_named_cluster
 legend_colours <- legend_colours[!duplicated(names(legend_colours))]
-legend_colours <- legend_colours[c("Macrophages", "Monocytes", "cDCs", "Plasma Cells", "B Cells", "CD4 T Cells", "Tregs", "Mitotic CD4 T Cells", "Mitotic CD8 T Cells", "CD8 T Cells", "NK cells", "T-cell-like", "Unknown")]
+legend_colours <- legend_colours[c("Macrophages, 1, 4, 8", "Monocytes, 15", "cDCs, 13", "Plasma Cells, 2, 3", "B Cells, 12, 16", "CD4 T Cells, 7, 20a", "Tregs, 10", "Mitotic CD4 T Cells, 18b", "Mitotic CD8 T Cells, 18a", "CD8 T Cells, 6, 9a, 20b", "NK cells, 9b, 9c", "T-cell-like, 14", "Unknown, 21")]
 
 df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
 names(df_legend_colours) <- c("Cell_Type", "Colour")
 df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
+
+library(gridExtra)
 
 # Plot new named clusters
 png('Results/UMAP_named_clusters.png', height=1080, width=2160)
@@ -483,13 +504,6 @@ p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed
 p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
 grid.arrange(p1, p2, ncol=2)
 dev.off()
-
-png('Results/UMAP_named_and_numbered_clusters.png', height=2160, width=2160)
-plotUMAP(sce_all_filt, colour_by="cluster", text_by="main_clusters", text_size=20, by_exprs_values='reconstructed', point_size=0.3) +
-guides(colour = guide_legend(override.aes = list(size=30)))+ theme(text = element_text(size = 40), legend.title=element_blank(), legend.position=c(0.1,0.3))
-dev.off()
-
-library(gridExtra)
 
 png(filename='Results/UMAP_named_and_numbered_clusters.png', height=1080, width=2160)
 plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
@@ -500,18 +514,13 @@ plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
   theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
         axis.text.x=element_blank(), axis.ticks.x=element_blank(),
         axis.text.y=element_blank(), axis.ticks.y=element_blank())
-plot1 <- plotUMAP(sce_all_filt, point_size=0, text_by="main_clusters", text_size=20) +
+plot1 <- plotUMAP(sce_all_filt, point_size=0, text_by="main_clusters", text_size=14) +
   aes(colour = sce_all_filt$colour) +
   geom_point(shape='.', size=1, alpha=0.5) +
-  geom_text(x=-10, y=8, size=30, label="B", color="black") +
+  geom_text(x=-10, y=8, size=30, label="C", color="black") +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
-
-# Update shiny app to filtered data for easier visualization and identification
-sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
-sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
-saveRDS(sce_all_filt, file='shiny_app/data.rds')
 
 ```
 
@@ -520,6 +529,11 @@ saveRDS(sce_all_filt, file='shiny_app/data.rds')
 Save everything
 
 ```{r}
+# Update shiny app to filtered data for easier visualization and identification
+sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
+sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
+saveRDS(sce_all_filt, file='shiny_app/data.rds')
+
 sessionInfo()
 save(sce_all_filt, file='Data/sce_all_filt.RData')
 save(list=ls(), file='ongoing_full_diff.RData') 

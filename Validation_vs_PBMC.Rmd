@@ -172,8 +172,8 @@ pigPBMCsce$EXP_celltype <- paste0('PBMC, ', pigPBMCsce$celltypes)
 PBMC_colour_list <- vector("list", length(pigPBMCsce$EXP_celltype))
 unique(pigPBMCsce$EXP_celltype)
 PBMC_colour_list[grep('Monocytes', pigPBMCsce$EXP_celltype)] <- '#FB9A99' #pink
-PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF99' #pale yellow
-PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#1F78B4' #dark blue
+PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF00' #yellow
+PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF00' #yellow
 PBMC_colour_list[grep('ASC', pigPBMCsce$EXP_celltype)] <- '#1F78B4' #dark blue
 PBMC_colour_list[grep('B cells', pigPBMCsce$EXP_celltype)] <- '#A6CEE3' #pale blue
 PBMC_colour_list[grep('CD4+', pigPBMCsce$EXP_celltype)] <- '#B2DF8A' #light green
@@ -554,7 +554,7 @@ grouplist2[sapply(grouplist2, is.null)] <- 'l'
 links$group <- grouplist2
 
 # Give each group a colour
-my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#6A3D9A", "#FB9A99", "#E31A1C", "#FFFF99", "#FDBF6F", "#FF7F00", "#B15928"])'
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#6A3D9A", "#FB9A99", "#E31A1C", "#FFFF00", "#FDBF6F", "#FF7F00", "#B15928"])'
 
 # convert names to IDs
 links$IDsource <- match(links$source, nodes$name)-1 
