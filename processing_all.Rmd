@@ -381,7 +381,7 @@ library(scds)
 for(i in 1:length(sce_list)){
   sce_list[[i]] <- cxds(sce_list[[i]])
   sce_list[[i]]$query_doublet <- isOutlier(sce_list[[i]]$cxds_score, nmads=5, type='higher')
-  plotReducedDim(sce_list[[i]], 'UMAP', color_by='cxds_score')
+  plotReducedDim(sce_list[[i]], 'UMAP', colour_by='cxds_score')
 }
 
 ```
