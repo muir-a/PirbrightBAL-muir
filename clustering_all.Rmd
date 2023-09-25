@@ -188,10 +188,10 @@ ggplot(doublet.tab, aes(x=cluster, y=sum_counts, colour=query_doublet)) +
 These data strongly suggest that cluster 17 is largely composed of doublets. Let's look at the top marker genes to make sure we aren't getting rid of something unique, and check its representation across samples.
 
 ```{r}
-plotUMAP(sce_all_corrected, color_by='cluster')
-plotUMAP(sce_all_corrected, by_exprs_values='logcounts', color_by='ENSSSCG00000023333')
-plotUMAP(sce_all_corrected, by_exprs_values='logcounts', color_by='ENSSSCG00000000492')
-plotUMAP(sce_all_corrected, by_exprs_values='logcounts', color_by='ENSSSCG00000022230')
+plotUMAP(sce_all_corrected, colour_by='cluster')
+plotUMAP(sce_all_corrected, by_exprs_values='logcounts', colour_by='ENSSSCG00000023333')
+plotUMAP(sce_all_corrected, by_exprs_values='logcounts', colour_by='ENSSSCG00000000492')
+plotUMAP(sce_all_corrected, by_exprs_values='logcounts', colour_by='ENSSSCG00000022230')
 
 barplot(prop.table(table(sce_all_corrected$cluster, sce_all_corrected$Sample), margin=2)['17',])
 
@@ -474,7 +474,7 @@ sce_all_9$cluster <- sce_all_9_clust
 clust9 <- rep(0, times=ncol(sce_all_corrected))
 clust9[c9] <- sce_all_9_clust
 
-genes <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD8A', 'RORC', 'CD3E', 'KLRB1', 'CD8B')]
+genes <- rownames(sce_all)[rowData(sce_all)$Symbol %in% c('CD8A', 'CD3E', 'KLRB1', 'CD8B')]
 # note CD4 was not in the list of HVGs
 assays(sce_all_9)$logcounts <- assays(sce_all)$logcounts[rownames(sce_all_9),c9]
 plotExpression(sce_all_9, features=genes, x='cluster', exprs_values='logcounts')
@@ -482,7 +482,7 @@ plotExpression(sce_all_9, features=genes, x='cluster', exprs_values='logcounts')
 
 ```
 
-This yields 3 subclusters, one which appears to be mainly CD3E/CD8A+, one which appears to have high KLRB1 and RORC, and the other which is intermediate and likely marked by other genes. We'll go with this level of unsupervised subclustering so that we can extract the T cells and will have to think about the identities of the other subclusters later as well. 
+This yields 3 subclusters, one which appears to be mainly CD3E/CD8A+, one which appears to have high KLRB1, and the other which is intermediate and likely marked by other genes. We'll go with this level of unsupervised subclustering so that we can extract the T cells and will have to think about the identities of the other subclusters later as well. 
 
 ```{r}
 

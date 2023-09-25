@@ -56,6 +56,7 @@ LICENSE
 *.RData
 *sample*/
 *analysis/
+*.pdf
 *.txt
 *.png
 *.csv
