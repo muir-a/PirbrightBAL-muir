@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This script picks up where "clustering all.Rmd" left off. 
 
-This script is for running differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female mice for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
+We will start by labelling the clusters and doing some filtering to narrow to those clusters that we intend to run differential analyses on. We will then run differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female mice for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
 
 # Loading the data
 
@@ -31,17 +31,13 @@ library(bluster)
 load('ongoing_full_clustered.RData')
 
 ## size of saved data got a bit out of hand
-rm(all, sce_list)
+rm(sce_list)
 
 ```
 
+# Cluster annotation
 
-# Differential abundance analysis
-
-This analysis will be run using a negative binomial test. Because clusters were computed on the dataset after merging and correcting for differences between runs, we will not include run as a covariate here. Instead, we will account for sex while testing differential abundance between conditions. 
-
-We also wish to account for the sorting strategy that was used by only comparing clusters that would have fallen into the same sorting gate (a bit of a glorified FACS analysis really). For this reason, we will split the data into the sorted populations of macrophages/monocytes/DCs, CD4+ Ts, CD8b+ Ts, and B cells before looking for differential abundance within these groups. So here we consider all of our clusters and split them according to major cell types (and whether we need to exclude them for other reasons). We'll first have a look at some key marker genes as a sanity check before running.
-
+Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names that can be transposed into figures. As a quick check in this script, we look at particular marker genes first.
 
 ```{r}
 ## first look at marker genes for sorting
@@ -68,37 +64,212 @@ plotExpression(sce_all, features=rownames(sce_all)[rowData(sce_all)$Symbol == 'C
 
 ```
 
-From this, we determine that the following clusters fall into each category. Of note, our differential abundance analyses will take place within categories that are smaller or the same size as those used for sorting. In this way, the sorting and binning won't play a role in our results.
+Based on our examinations in the clustering script, we exclude cluster 5 as low quality and clusters 17 and 11 as doublets. 
+
+Note that we are maintaining 2 separate datasets here: sce_filt (from sce_all_corrected), which contains 5000 HVGs and reconstructed values after batch correction; and sce_all_filt (from sce_all), which contains all detected genes with normalised (but not batch corrected) log-count values and original counts. sce_filt is important for visualization (e.g. UMAP), whereas sce_all_filt is important for count-based differential analyses and seeing expression values that aren't interpolated after batch correction.
+
+```{r}
+
+sce_filt <- sce_all_corrected[,!sce_all_corrected$cluster %in% c('5', '17', '11')]
+
+sce_all_filt <- sce_all[,!sce_all$cluster %in% c('5', '17', '11')]
+```
+
+Next we name the good quality clusters. 
+
+```{r}
+## add in cluster names as sce_all_filt$named_cluster
+#Long-form annotated version including cell subtypes
+for (i in unique(sce_all_filt$cluster)){
+  if(any(i==c('7', '20a'))){
+    name <- 'CD4 T Cells' 
+    long_name <- 'CD4 T Cells, 7, 20a'}
+  if(any(i==c('18b'))){
+    name <- 'Mitotic CD4 T Cells'
+    long_name <- 'Mitotic CD4 T Cells, 18b'}
+  if(any(i==c('10'))){
+    name <- 'Tregs'
+    long_name <- 'Tregs, 10'}
+  if(any(i==c('6', '9a', '20b'))){
+    name <- 'CD8 T Cells' 
+    long_name <- 'CD8 T Cells, 6, 9a, 20b'}
+  if(any(i==c('18a'))){
+    name <- 'Mitotic CD8 T Cells'
+    long_name <- 'Mitotic CD8 T Cells, 18a'}
+  if(any(i==c('1', '4', '8'))){
+    name <- 'Macrophages' 
+    long_name <- 'Macrophages, 1, 4, 8'}
+  if(any(i==c('15'))){
+    name <- 'Monocytes'
+    long_name <- 'Monocytes, 15'}
+  if(any(i==c('13'))){
+    name <- 'cDCs'
+    long_name <- 'cDCs, 13'}
+  if(any(i==c('2', '3'))){
+    name <- 'Plasma Cells' 
+    long_name <- 'Plasma Cells, 2, 3'}
+  if(any(i==c('12', '16'))){
+    name <- 'B Cells' 
+    long_name <- 'B Cells, 12, 16'}
+  if(any(i==c('14'))){
+    name <- 'T-cell-like' 
+    long_name <- 'T-cell-like, 14'}
+  if(any(i==c('9b', '9c'))){
+    name <- 'NK cells' 
+    long_name <- 'NK cells, 9b, 9c'}
+  if(any(i==c('21'))){
+    name <- 'Unknown'
+    long_name <- 'Unknown, 21'}
+  if(any(i==c('19'))){
+    name <- 'Epithelial cells' 
+    long_name <- 'Epithelial Cells, 19'}
+  sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
+  sce_all_filt$long_named_cluster[sce_all_filt$cluster==i] <- long_name
+}
+
+# create 'main_clusters' column that ignores subclustering
+main_clusters <- gsub("a", "", sce_all_filt$cluster)
+main_clusters <- gsub("b", "", main_clusters)
+main_clusters <- gsub("c", "", main_clusters)
+sce_all_filt$main_clusters <- main_clusters
+
+# Create label and colour slots for convenient annotation later
+sce_all_filt$verbose_cluster <- paste0('BAL, ', sce_all_filt$named_cluster, ', ', sce_all_filt$cluster)
+sce_all_filt$EXP_celltype <- paste0('BAL, ', sce_all_filt$named_cluster)
+
+BAL_colour_list <- vector("list", length(sce_all_filt$EXP_celltype))
+BAL_colour_list[grep('Macrophages', sce_all_filt$EXP_celltype)] <- '#E31A1C' #red
+BAL_colour_list[grep('Monocytes', sce_all_filt$EXP_celltype)] <- '#FB9A99' #pink
+BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF00' #yellow
+BAL_colour_list[grep('Plasma Cells', sce_all_filt$EXP_celltype)] <- '#1F78B4' #dark blue
+BAL_colour_list[grep('B Cells', sce_all_filt$EXP_celltype)] <- '#A6CEE3' #pale blue
+BAL_colour_list[grep('Tregs', sce_all_filt$EXP_celltype)] <- '#CAB2D6' #light purple
+BAL_colour_list[grep('CD4', sce_all_filt$EXP_celltype)] <- '#B2DF8A' #light green
+BAL_colour_list[grep('Mitotic CD4 T Cells', sce_all_filt$EXP_celltype)] <- '#FDBF6F' #pale orange
+BAL_colour_list[grep('CD8', sce_all_filt$EXP_celltype)] <- '#33A02C' # green
+BAL_colour_list[grep('Mitotic CD8 T Cells', sce_all_filt$EXP_celltype)] <- '#FF7F00' #orange
+BAL_colour_list[grep('NK', sce_all_filt$EXP_celltype)] <- '#6A3D9A' #purple
+BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B15928' #brown
+sce_all_filt$colour  <- BAL_colour_list
+
+colData(sce_filt)[,c('named_cluster', 'long_named_cluster', 'main_clusters', 'verbose_cluster', 'EXP_celltype', 'colour')] <- colData(sce_all_filt)[, c('named_cluster', 'long_named_cluster', 'main_clusters', 'verbose_cluster', 'EXP_celltype', 'colour')]
+
+```
+
+And make some UMAPs.
+
+```{r}
+
+legend_colours <- BAL_colour_list
+names(legend_colours) <- sce_all_filt$long_named_cluster
+legend_colours <- legend_colours[!duplicated(names(legend_colours))]
+legend_colours <- legend_colours[c("Macrophages, 1, 4, 8", "Monocytes, 15", "cDCs, 13", "Plasma Cells, 2, 3", "B Cells, 12, 16", "CD4 T Cells, 7, 20a", "Tregs, 10", "Mitotic CD4 T Cells, 18b", "Mitotic CD8 T Cells, 18a", "CD8 T Cells, 6, 9a, 20b", "NK cells, 9b, 9c", "T-cell-like, 14", "Epithelial Cells, 19", "Unknown, 21")]
+
+df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
+names(df_legend_colours) <- c("Cell_Type", "Colour")
+df_legend_colours$Cell_Type <- factor(df_legend_colours$Cell_Type, levels=c(df_legend_colours$Cell_Type))
+df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
+
+library(gridExtra)
+
+# Plot new named clusters
+png('Results/UMAP_named_clusters.png', height=1080, width=2160)
+p1 <- plotUMAP(sce_filt, colour_by="cluster", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+p2 <- plotUMAP(sce_filt, colour_by="named_cluster", point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
+grid.arrange(p1, p2, ncol=2)
+dev.off()
+
+png(filename='Results/UMAP_named_and_numbered_clusters.png', height=1080, width=2160)
+plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color=NULL) +
+  scale_color_manual(values = legend_colours) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotUMAP(sce_filt, point_size=0, text_by="main_clusters", text_size=14) +
+  aes(colour = sce_filt$colour) +
+  geom_point(shape='.', size=1, alpha=0.5) +
+  geom_text(x=-10, y=8, size=30, label="C", color="black") +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
+grid.arrange(plot1, plot0, ncol=2)
+dev.off()
+
+```
+
+Based on the sorting strategy used, we did not intend to capture CD16+ cells (incl NK cells and NK-cell-like T cells) or epithelial cells. For this reason, we are reluctant to run differential analyses on clusters 9 (NK and NK-like CD8+ Ts) and cluster 19 (epithelial cells) as these are likely a biased set of cells within these phenotypes that snuck through the sorts. We will therefore exclude these clusters as well.
+
+```{r}
+sce_all_filt <- sce_all_filt[,!sce_all_filt$cluster %in% c('19', '9a', '9b', '9c')]
+sce_filt <- sce_filt[,!sce_filt$cluster %in% c('19', '9a', '9b', '9c')]
+
+legend_colours2 <- legend_colours[-c(grep('Epithelial', names(legend_colours)), grep('NK', names(legend_colours)))]
+
+names(legend_colours2) <- c("Macrophages, 1, 4, 8", "Monocytes, 15", "cDCs, 13", "Plasma Cells, 2, 3", "B Cells, 12, 16", "CD4 T Cells, 7, 20a", "Tregs, 10", "Mitotic CD4 T Cells, 18b", "Mitotic CD8 T Cells, 18a", "CD8 T Cells, 6, 20b", "T-cell-like, 14", "Unknown, 21")
+
+df_legend_colours2 <- data.frame(unlist(names(legend_colours2)), unlist(legend_colours2))
+names(df_legend_colours2) <- c("Cell_Type", "Colour")
+df_legend_colours2$Cell_Type <- factor(df_legend_colours2$Cell_Type, levels=c(df_legend_colours2$Cell_Type))
+df_legend_colours2$dummy_data <- seq(1, length(df_legend_colours2[,1]))
+
+
+png(filename='Results/UMAP_named_and_numbered_clusters_sorted_only.png', height=1080, width=2160)
+plot0 <- ggplot(data=df_legend_colours2, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color=NULL) +
+  scale_color_manual(values = legend_colours2) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotUMAP(sce_filt, point_size=0, text_by="main_clusters", text_size=14) +
+  aes(colour = sce_filt$colour) +
+  geom_point(shape='.', size=1, alpha=0.5) +
+  geom_text(x=-10, y=8, size=30, label="C", color="black") +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
+grid.arrange(plot1, plot0, ncol=2)
+dev.off()
+
+
+```
+
+
+# Differential abundance analysis
+
+For running DA analysis, we must account for the sorting strategy that was used by only comparing clusters that would have fallen into the same sorting gate (a bit of a glorified FACS analysis really). For this reason, we will split the data into the sorted populations of macrophages/monocytes/DCs, CD4+ Ts, CD8b+ Ts, and B cells before looking for differential abundance within these groups. Of note, our differential abundance analyses will take place within categories that are smaller or the same size as those used for sorting. In this way, the sorting and binning won't play a role in our results.
 
 CD4: 7, 10, 18b, 20a
 
-CD8: 6, 9a, 18a, 20b
+CD8: 6, 18a, 20b
 
 Macrophage/Monocyte/DC: 1, 4, 8, 13, 15
 
 B: 2, 3, 12, 16
 
-This leaves clusters 9b, 9c, 14, 19 and 21 to be removed without consideration, as well as clusters 5, 11 and 17, which were determined to be either doublet or poor quality. 
+This leaves clusters 14 and 21 unconsidered as we are not completely sure how they were sorted.
 
-After running each of the sorted groups separately, we'll also run a global differential abundance analysis that ignores the sorting strategy, just out of interest. In theory, if the same proportions of each sorted population were indeed pooled for sequencing, the results should be very similar and will give us a chance to look at the clusters that we were not easily able to assign to a sorted class.
+After running each of the sorted groups separately, we'll also run a global differential abundance analysis that ignores the sorting strategy, just out of interest. In theory, if the same proportions of each sorted population were indeed pooled for sequencing, the results should be very similar and will give us a chance to look at the clusters that we were not able to assign to a sorted class.
 
 ```{r}
 
-CD4s <- sce_all_corrected[,sce_all_corrected$cluster %in% c('7', '10', '18b', '20a')]
+CD4s <- sce_all_filt[,sce_all_filt$cluster %in% c('7', '10', '18b', '20a')]
 
-CD8s <- sce_all_corrected[,sce_all_corrected$cluster %in% c('6', '9a', '18a', '20b')]
+CD8s <- sce_all_filt[,sce_all_filt$cluster %in% c('6', '18a', '20b')]
 
-MMDs <- sce_all_corrected[,sce_all_corrected$cluster %in% c('1', '4', '8', '13', '15')]
+MMDs <- sce_all_filt[,sce_all_filt$cluster %in% c('1', '4', '8', '13', '15')]
 
-Bs <- sce_all_corrected[,sce_all_corrected$cluster %in% c('2', '3', '12', '16')]
+Bs <- sce_all_filt[,sce_all_filt$cluster %in% c('2', '3', '12', '16')]
 
-all <- sce_all_corrected[,sce_all_corrected$cluster %in% c('1', '2', '3', '4', '6', '7', '8', '9a', '9b', '9c', '10', '12', '13', '14', '15', '16', '18a', '18b', '19', '20a', '20b', '21')]
+all <- sce_all_filt
 
 subsets <- list(CD4s=CD4s, CD8s=CD8s, MMDs=MMDs, Bs=Bs, all=all)
 
 ```
 
-And we run our DA tests. We'll consider a change in abundance with any treatment versus PBS in an ANOVA-like analysis (strictly speaking, I believe this is analysis-of-deviance-like).
+Our DA analysis will be run using a negative binomial test. Because clusters were computed on the dataset after merging and correcting for differences between runs, we will not include run as a covariate here. Instead, we will account for sex while testing differential abundance between conditions. 
+
+We'll consider a change in abundance with any treatment versus PBS in an ANOVA-like analysis (strictly speaking, I believe this is analysis-of-deviance-like).
 
 ```{r}
 library(edgeR)
@@ -131,7 +302,7 @@ Interestingly, the only strong effect here is on the proportion of Treg in with 
 
 ```{r}
 ## proportion of total cells
-props <- prop.table(table(sce_all_corrected$cluster, sce_all_corrected$Sample), margin=2)['10',]
+props <- prop.table(table(all$cluster, all$Sample), margin=2)['10',]
 proptab <- annot[,c('sample', 'Condition', 'Sex')]
 proptab$proportions <- props[rownames(proptab)]
 proptab$Condition <- factor(proptab$Condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'))
@@ -195,28 +366,15 @@ dev.off()
 
 ```
 
+
+
 # Differential expression analysis
 
-Now we move on to differential expression analysis. Here our decision about correcting for run versus sex is more complicated as we will be using the raw values which do exhibit run-specific effects. Comparing results from sex- versus run-corrected data revealed some Y-chromosome genes were being called as DE when we only corrected for run. This is a problem as the balance of M/F differs by condition (either 1v2 or 2v1). To avoid this, we'll have to correct for sex and accept that there is orthogonal noise generated by each run that will simply reduce our power.
+Now we move on to differential expression analyses. Here, our decision about correcting for run versus sex is more complicated as we will be using the raw values which do exhibit run-specific effects. Comparing results from sex- versus run-corrected data revealed some Y-chromosome genes were being called as DE when we only corrected for run. This is a problem as the balance of M/F differs by condition (either 1v2 or 2v1). To avoid this, we'll have to correct for sex and accept that there is noise generated by each run that will simply reduce our power.
 
-Based on our examinations in the clustering script, we exclude cluster 5 as low quality and clusters 17 and 11 as doublets. 
-
-```{r}
-
-sce_filt <- sce_all_corrected
-
-sce_filt <- sce_filt[,!sce_filt$cluster %in% c('5', '17', '11')]
-
-plotUMAP(sce_filt, colour_by='cluster')
-
-```
-
-Now we test for differential expression. This analysis will be run as a pseudobulk analysis, pooling counts from all of the cells within each cluster for each sample before treating like bulk RNAseq data. Differential expression will then be analysed for each cluster. For this first pass, we will use and ANOVA-like analysis (again, more like ANODEV I believe) for each cluster to ask whether any condition deviates from the others. 
+Now we test for differential expression. This analysis will be run as a pseudobulk analysis, pooling counts from all of the cells within each cluster for each sample before treating like bulk RNAseq data. Differential expression will then be analysed for each cluster. For this first pass, we will use an ANOVA-like analysis (again, more like ANODEV I believe) for each cluster to ask whether any condition deviates from the others. 
 
 ```{r}
-
-sce_all_filt <- sce_all[,colnames(sce_filt)]
-sce_all_filt$cluster <- sce_filt$cluster
 
 summed <- aggregateAcrossCells(sce_all_filt, 
     id=colData(sce_filt)[,c("cluster", "Sample")])
@@ -262,7 +420,9 @@ for(i in 1:length(clusts)){
 
 
 cls <- lapply(de.results.any, class)
-de.results.any <- de.results.any[-which(cls %in% 'character')]
+if(length(which(cls == 'character'))>0){
+  de.results.any <- de.results.any[-which(cls %in% 'character')]
+}
 
 
 for(i in 1:length(de.results.any)){
@@ -280,7 +440,7 @@ for(i in 1:length(de.results.any)){
 
 ```
 
-There aren't big shifts by condition but there are a handful of genes in most clusters that significantly vary in one or more conditions. Also clusters 9b, 13, 19, 20, and 21 did not have enough cells in each sample/cluster split. 
+There aren't big shifts by condition but there are a handful of genes in most clusters that significantly vary in one or more conditions. 
 
 We would now like to formally test each condition against PBS and generate a list of genes significant in each of these. 
 
@@ -294,7 +454,9 @@ for(i in 1:length(clusts)){
 }
 
 cls <- lapply(de.results.AdHANP, class)
-de.results.AdHANP <- de.results.AdHANP[-which(cls %in% 'character')]
+if(length(which(cls == 'character'))>0){
+  de.results.AdHANP <- de.results.AdHANP[-which(cls %in% 'character')]
+}
 
 for(i in 1:length(de.results.AdHANP)){
   de.results.AdHANP[[i]]$FDR <- p.adjust(de.results.AdHANP[[i]]$PValue, method='fdr')
@@ -318,7 +480,9 @@ for(i in 1:length(clusts)){
 }
 
 cls <- lapply(de.results.AdHANPAdIL1b, class)
-de.results.AdHANPAdIL1b <- de.results.AdHANPAdIL1b[-which(cls %in% 'character')]
+if(length(which(cls == 'character'))>0){
+  de.results.AdHANPAdIL1b <- de.results.AdHANPAdIL1b[-which(cls %in% 'character')]
+}
 
 for(i in 1:length(de.results.AdHANPAdIL1b)){
   de.results.AdHANPAdIL1b[[i]]$FDR <- p.adjust(de.results.AdHANPAdIL1b[[i]]$PValue, method='fdr')
@@ -342,7 +506,9 @@ for(i in 1:length(clusts)){
 }
 
 cls <- lapply(de.results.pH1N1, class)
-de.results.pH1N1 <- de.results.pH1N1[-which(cls %in% 'character')]
+if(length(which(cls == 'character'))>0){
+  de.results.pH1N1 <- de.results.pH1N1[-which(cls %in% 'character')]
+}
 
 for(i in 1:length(de.results.pH1N1)){
   de.results.pH1N1[[i]]$FDR <- p.adjust(de.results.pH1N1[[i]]$PValue, method='fdr')
@@ -391,13 +557,11 @@ plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_
 
 y <- DGEList(counts=counts(summed.filt), samples=colData(summed.filt))
 
-plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='run', gene=IFI6)
-plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6)
-plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='run', gene=IFI6)
+plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='run', gene=IFI6, main='cluster 6')
+plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 6')
+plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='run', gene=IFI6, main='cluster 6')
 
 ## this is interesting as it has highlighted why we had such different values when including run instead of sex in the model - it looks like one of the pH1N1 samples that was in its own run (other sample was excluded) ended up getting flattened.
-
-library(gridExtra)
 
 pdf('Results/IFI6_pH1N1_egs.pdf', height=10, width=20)
 p1 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 6')
@@ -409,120 +573,7 @@ dev.off()
 ```
 
 
-# Cluster annotation
 
-Based on manual annotation from the clustered data performed using the generated tables and our shiny app, we'll give the clusters more intuitive names that can be transposed into figures.
-
-```{r}
-# Manual annotation revealed that cluster 19 are epithelial cells, so we'll remove them from further analysis
-sce_all_filt <- sce_all_filt[,!sce_all_filt$cluster %in% c('19')]
-
-## add in cluster names as sce_all_filt$named_cluster
-#Long-form annotated version including cell subtypes
-for (i in unique(sce_all_filt$cluster)){
- if(any(i==c('7', '20a'))){
-    name <- 'CD4 T Cells' 
-    long_name <- 'CD4 T Cells, 7, 20a'}
- if(any(i==c('18b'))){
-    name <- 'Mitotic CD4 T Cells'
-    long_name <- 'Mitotic CD4 T Cells, 18b'}
- if(any(i==c('10'))){
-    name <- 'Tregs'
-    long_name <- 'Tregs, 10'}
- if(any(i==c('6', '9a', '20b'))){
-    name <- 'CD8 T Cells' 
-    long_name <- 'CD8 T Cells, 6, 9a, 20b'}
- if(any(i==c('18a'))){
-    name <- 'Mitotic CD8 T Cells'
-    long_name <- 'Mitotic CD8 T Cells, 18a'}
- if(any(i==c('1', '4', '8'))){
-    name <- 'Macrophages' 
-    long_name <- 'Macrophages, 1, 4, 8'}
- if(any(i==c('15'))){
-    name <- 'Monocytes'
-    long_name <- 'Monocytes, 15'}
- if(any(i==c('13'))){
-    name <- 'cDCs'
-    long_name <- 'cDCs, 13'}
- if(any(i==c('2', '3'))){
-    name <- 'Plasma Cells' 
-    long_name <- 'Plasma Cells, 2, 3'}
- if(any(i==c('12', '16'))){
-    name <- 'B Cells' 
-    long_name <- 'B Cells, 12, 16'}
- if(any(i==c('14'))){
-    name <- 'T-cell-like' 
-    long_name <- 'T-cell-like, 14'}
- if(any(i==c('9b', '9c'))){
-    name <- 'NK cells' 
-    long_name <- 'NK cells, 9b, 9c'}
- if(any(i==c('21'))){
-    name <- 'Unknown'
-    long_name <- 'Unknown, 21'}
-  sce_all_filt$named_cluster[sce_all_filt$cluster==i] <- name
-  sce_all_filt$long_named_cluster[sce_all_filt$cluster==i] <- long_name
-}
-# create 'main_clusters' column that ignores subclustering
-main_clusters <- gsub("a", "", sce_all_filt$cluster)
-main_clusters <- gsub("b", "", main_clusters)
-main_clusters <- gsub("c", "", main_clusters)
-sce_all_filt$main_clusters <- main_clusters
-
-# Create label and colour slots for convenient annotation later
-sce_all_filt$verbose_cluster <- paste0('BAL, ', sce_all_filt$named_cluster, ', ', sce_all_filt$cluster)
-sce_all_filt$EXP_celltype <- paste0('BAL, ', sce_all_filt$named_cluster)
-
-BAL_colour_list <- vector("list", length(sce_all_filt$EXP_celltype))
-BAL_colour_list[grep('Macrophages', sce_all_filt$EXP_celltype)] <- '#E31A1C' #red
-BAL_colour_list[grep('Monocytes', sce_all_filt$EXP_celltype)] <- '#FB9A99' #pink
-BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF00' #yellow
-BAL_colour_list[grep('Plasma Cells', sce_all_filt$EXP_celltype)] <- '#1F78B4' #dark blue
-BAL_colour_list[grep('B Cells', sce_all_filt$EXP_celltype)] <- '#A6CEE3' #pale blue
-BAL_colour_list[grep('Tregs', sce_all_filt$EXP_celltype)] <- '#CAB2D6' #light purple
-BAL_colour_list[grep('CD4', sce_all_filt$EXP_celltype)] <- '#B2DF8A' #light green
-BAL_colour_list[grep('Mitotic CD4 T Cells', sce_all_filt$EXP_celltype)] <- '#FDBF6F' #pale orange
-BAL_colour_list[grep('CD8', sce_all_filt$EXP_celltype)] <- '#33A02C' # green
-BAL_colour_list[grep('Mitotic CD8 T Cells', sce_all_filt$EXP_celltype)] <- '#FF7F00' #orange
-BAL_colour_list[grep('NK', sce_all_filt$EXP_celltype)] <- '#6A3D9A' #purple
-BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B15928' #brown
-sce_all_filt$colour  <- BAL_colour_list
-
-legend_colours <- BAL_colour_list
-names(legend_colours) <- sce_all_filt$long_named_cluster
-legend_colours <- legend_colours[!duplicated(names(legend_colours))]
-legend_colours <- legend_colours[c("Macrophages, 1, 4, 8", "Monocytes, 15", "cDCs, 13", "Plasma Cells, 2, 3", "B Cells, 12, 16", "CD4 T Cells, 7, 20a", "Tregs, 10", "Mitotic CD4 T Cells, 18b", "Mitotic CD8 T Cells, 18a", "CD8 T Cells, 6, 9a, 20b", "NK cells, 9b, 9c", "T-cell-like, 14", "Unknown, 21")]
-
-df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
-names(df_legend_colours) <- c("Cell_Type", "Colour")
-df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
-
-library(gridExtra)
-
-# Plot new named clusters
-png('Results/UMAP_named_clusters.png', height=1080, width=2160)
-p1 <- plotUMAP(sce_all_filt, colour_by="cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
-p2 <- plotUMAP(sce_all_filt, colour_by="named_cluster", by_exprs_values='reconstructed', point_size=0.3) + guides(colour = guide_legend(override.aes = list(size=8)))+ theme(text = element_text(size = 20))
-grid.arrange(p1, p2, ncol=2)
-dev.off()
-
-png(filename='Results/UMAP_named_and_numbered_clusters.png', height=1080, width=2160)
-plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
-  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
-  labs(x=NULL, y=NULL, color=NULL) +
-  scale_color_manual(values = legend_colours) +
-  guides(colour = guide_legend(ncol = 1)) + 
-  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
-        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
-        axis.text.y=element_blank(), axis.ticks.y=element_blank())
-plot1 <- plotUMAP(sce_all_filt, point_size=0, text_by="main_clusters", text_size=14) +
-  aes(colour = sce_all_filt$colour) +
-  geom_point(shape='.', size=1, alpha=0.5) +
-  geom_text(x=-10, y=8, size=30, label="C", color="black") +
-  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
-grid.arrange(plot1, plot0, ncol=2)
-dev.off()
-
-```
 
 # Wrapping up
 
@@ -532,11 +583,11 @@ Save everything
 # Update shiny app to filtered data for easier visualization and identification
 sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
-saveRDS(sce_all_filt, file='shiny_app/data.rds')
+#saveRDS(sce_all_filt, file='shiny_app/data.rds')
 
 sessionInfo()
 save(sce_all_filt, file='Data/sce_all_filt.RData')
-save(list=ls(), file='ongoing_full_diff.RData') 
+#save(list=ls(), file='ongoing_full_diff.RData') 
 ```
 
 
