@@ -710,6 +710,21 @@ png(filename='Results/heatmap_monocytic_Cross.png', height=2160, width=2160)
 heatmap.2(mono_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
 dev.off()
 
+# Cluster 20 T cells
+BAL_C20 <- corrected_BAL[rownames(corrected_BAL) %in% T_cell_genes, ]
+BAL_C20 <- BAL_C20[, BAL_C20$cluster %in% c("20a", "20b")]
+PBMC_C20 <- corrected_PBMC[rownames(corrected_PBMC) %in% T_cell_genes, ]
+PBMC_C20 <- PBMC_C20[, PBMC_C20$seurat_clusters %in% c("0", "3", "28")]
+identical(rownames(PBMC_C20), rownames(BAL_C20))
+
+BAL_C20 <- as.matrix(logcounts(aggregateAcrossCells(BAL_C20, ids=BAL_C20$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_C20 <- as.matrix(logcounts(aggregateAcrossCells(PBMC_C20, ids=PBMC_C20$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+C20_Matrix <- cbind(BAL_C20, PBMC_C20)
+
+png(filename='Results/heatmap_cluster20_T_cells_Cross.png', height=2160, width=2160)
+heatmap.2(C20_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+dev.off()
+
 ```
 
 # Wrapping up
