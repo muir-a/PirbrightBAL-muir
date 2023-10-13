@@ -213,6 +213,34 @@ plot1 <- plotUMAP(sce_filt, point_size=0) +
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 ```
+And a heatmap of all defining gene markers for our cell types
+```{r}
+library(gplots)
+library(viridis)
+
+defining_genes <- c("CD163", "FLT3", "CD14", "CD4", "CADM1", "CSF1R", "FCGR1A", "BCL6", "CCL17", "IRF8", "ADAM8", "PRDM1", "IRF4", "JCHAIN" , "TNFRSF17", "TNFRSF13B", "CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8", "CD28", "CD5", "CD3D", "CD3E", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "ACTG1", "GPR37", "NAPSA", "SFTPA1", "RPS3A", "RPS26", "RPS11", "RPL37")
+
+defining_sce <- sce_all_filt
+rownames(defining_sce) <- rowData(sce_all_filt)$Symbol
+# Remove forbidden rowData names (for generation of CompressedGRangesList)
+names(rowData(defining_sce))[which(names(rowData(defining_sce))=="start")]="gene_start"
+names(rowData(defining_sce))[which(names(rowData(defining_sce))=="end")]="gene_end"
+#subset to defining genes and calculate mean logcounts
+defining_sce <- defining_sce[rownames(defining_sce) %in% defining_genes, ]
+defining_matrix <- as.matrix(logcounts(aggregateAcrossCells(defining_sce, ids=defining_sce$long_named_cluster, statistics='mean', use.assay.type='logcounts')))
+
+xAxis <- colnames(defining_matrix)
+#xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "blue", "orange")
+colour_df <- unique(as.data.frame(colData(defining_sce))[, c("long_named_cluster", "colour")])
+colour_df <- colour_df[match(xAxis, colour_df$long_named_cluster),]
+identical(colour_df$long_named_cluster, xAxis)
+Col_Colours <- as.character(colour_df$colour)
+
+png(filename='Results/heatmap_defining_genes.png', height=2160, width=3840)
+heatmap.2(defining_matrix, margins=c(20,20), scale="row", col = bluered(100), cexRow=2, cexCol=2,  trace="none", key=TRUE, key.xlab="row Z-score", lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
+dev.off()
+```
+
 
 Based on the sorting strategy used, we did not intend to capture CD16+ cells (incl NK cells and NK-cell-like T cells) or epithelial cells. For this reason, we are reluctant to run differential analyses on clusters 9 (NK and NK-like CD8+ Ts) and cluster 19 (epithelial cells) as these are likely a biased set of cells within these phenotypes that snuck through the sorts. We will therefore exclude these clusters as well.
 
@@ -582,17 +610,17 @@ for (cluster in unique(y$samples$cluster)){
   plot <- plot_resid_gg(y, clust=cluster, regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main=cluster)
   print(plot)
 }
+# IFI6 appears to be universally up-regulated in infected pigs, though clusters 16 and 21 also show upregulation in IL1b vaccinated pigs. 
 
 pdf('Results/IFI6_pH1N1_egs.pdf', height=10, width=20)
-p1 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 6')
-p2 <- plot_resid_gg(y, clust='2', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 2')
-p3 <- plot_resid_gg(y, clust='1', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 1')
-p4 <- plot_resid_gg(y, clust='12', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 12')
-p5 <- plot_resid_gg(y, clust='16', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 16')
-p6 <- plot_resid_gg(y, clust='21', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 21')
+p4 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='CD8+ T Cells, cluster 6')
+p2 <- plot_resid_gg(y, clust='2', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='Plasma Cells, cluster 2')
+p5 <- plot_resid_gg(y, clust='1', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='Macrophages, cluster 1')
+p1 <- plot_resid_gg(y, clust='12', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='B Cells, cluster 12')
+p3 <- plot_resid_gg(y, clust='7', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='CD4+ T Cells, cluster 7')
+p6 <- plot_resid_gg(y, clust='13', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cDCs, cluster 13')
 grid.arrange(p1, p2, p3, p4, p5, p6, ncol=3)
 dev.off()
-
 
 ```
 
