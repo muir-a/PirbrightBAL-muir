@@ -850,14 +850,19 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
 dev.off()
 ```
 
+```{r IFI6-save}
+save(list=ls(), file='Data/NEBULA_IFI6_save.RData')
+```
+
 venn diagrams of shared genes
 ```{r VennDiagrams, eval=FALSE}
+# Venndir currently doesn't work on compute cluster so eval=FALSE, ran local separately
 colours <- c('#E31A1C', '#B2DF8A', '#33A02C', '#A6CEE3')
 
 library(ggvenn)
 png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
 x = list(Macrophages=PH1N1_Macrophages_genes, CD4_T_Cells=PH1N1_CD4_genes, CD8_T_Cells=PH1N1_CD8_genes, B_Cells=PH1N1_BCells_genes)
-ggvenn(x, show_elements=TRUE, label_sep="/n", fill_color=colours, set_name_size = 10, text_size=4)
+ggvenn(x, show_elements=TRUE, label_sep="\n", fill_color=colours, set_name_size = 10, text_size=4)
 dev.off()
 
 png(filename='Results/Venn_HANP.png', height=1080, width=2160)
@@ -876,11 +881,22 @@ ggvenn(x, show_elements=TRUE, label_sep="\n", fill_color=colours, set_name_size 
 dev.off()
 
 # Venn diagram with venndir package
+library(lwgeom)
+library(sf)
+library(terra)
+library(proj4)
+library(rgeos)
 library(eulerr)
 library(venndir)
-library(lwgeom)
 
-par(mfrow=c(1, 2))
+x = list(Macrophages=IL1b_Macrophages_genes, CD4_T_Cells=IL1b_CD4_genes, CD8_T_Cells=IL1b_CD8_genes, B_Cells=IL1b_BCells_genes)
+
+options("warn"=-1)
+setlist <- make_venn_test(100, 3)
+venndir(setlist)
+
+venndir(x)
+
 venndir(x,
         main="Non-proportional circles",
         #proportional=TRUE,
@@ -899,6 +915,42 @@ venndir(x,
         label_style="lite_box",
         show_items="item",
         item_cex=2)
+
+
+```
+GO enrichment of differentially expressed genes
+```{r GO}
+library(topGO)
+library(org.Ss.eg.db)
+
+test_genes <- as.factor(as.numeric(rownames(sce_all_filt) %in% PH1N1_CD8_genes))
+names(test_genes) <- rownames(sce_all_filt)
+test_GO <- new("topGOdata", ontology = "BP", allGenes = test_genes, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+test_GO
+
+resultFisher <- runTest(test_GO, algorithm = "classic", statistic = "fisher")
+
+resultKS <- runTest(test_GO, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(test_GO, algorithm = "elim", statistic = "ks")
+
+test_GO_Results <- GenTable(test_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+
+n <- 0
+ID_List <- c("HANP_BCells_genes", "HANP_CD4_genes", "HANP_CD8_genes", "HANP_Macrophages_genes", "IFI6_BCells_genes", "IFI6_CD4_genes", "IFI6_CD8_genes", "IFI6_Macrophages_genes", "IL1b_BCells_genes", "IL1b_CD4_genes", "IL1b_CD8_genes", "IL1b_Macrophages_genes", "PH1N1_BCells_genes", "PH1N1_CD4_genes", "PH1N1_CD8_genes", "PH1N1_Macrophages_genes")
+
+for (genelist in c(HANP_BCells_genes, HANP_CD4_genes, HANP_CD8_genes, HANP_Macrophages_genes, IFI6_BCells_genes, IFI6_CD4_genes, IFI6_CD8_genes, IFI6_Macrophages_genes, IL1b_BCells_genes, IL1b_CD4_genes, IL1b_CD8_genes, IL1b_Macrophages_genes, PH1N1_BCells_genes, PH1N1_CD4_genes, PH1N1_CD8_genes, PH1N1_Macrophages_genes)){
+  n <- n + 1
+  if (length(genelist) == 0) next
+  gene_factor <- as.factor(as.numeric(rownames(sce_all_filt) %in% genelist))
+  names(gene_factor) <- rownames(sce_all_filt)
+  GO_ont <- new("topGOdata", ontology = "BP", allGenes = gene_factor, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
+  resultFisher <- runTest(test_GO, algorithm = "classic", statistic = "fisher")
+  resultKS <- runTest(test_GO, algorithm = "classic", statistic = "ks")
+  resultKS.elim <- runTest(test_GO, algorithm = "elim", statistic = "ks")
+  GO_Results <- GenTable(test_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+  ID <- ID_List[n]
+  write.table(GO_Results, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE)
+}
 
 ```
 
