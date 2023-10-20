@@ -94,13 +94,14 @@ PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- 
 PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
 PH1N1_Data$delabel <- NA
 PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
+PH1N1_broad_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
 
 p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
   geom_point() + 
   theme_minimal() +
   geom_text_repel() +
   labs(title="pH1N1") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -116,14 +117,14 @@ IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP
 IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
 IL1b_Data$delabel <- NA
 IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-
+IL1b_broad_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
 
 p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
   geom_point() + 
   theme_minimal() +
   geom_text_repel() +
   labs(title="Ad-HA/NP+Ad-IL1b") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -139,14 +140,14 @@ HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP
 HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
 HANP_Data$delabel <- NA
 HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-
+HANP_broad_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
 
 p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
   geom_point() + 
   theme_minimal() +
   geom_text_repel() +
   labs(title="Ad-HA/NP") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -182,6 +183,7 @@ IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP
 IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
 IFI6_Data$delabel <- NA
 IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
+IFI6_broad_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
 # Set p-values floor
 IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
 
@@ -191,7 +193,7 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
   theme_minimal() +
   geom_text_repel() +
   labs(title="IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -234,7 +236,7 @@ p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpres
   theme_minimal() +
   geom_text_repel() +
   labs(title="Tregs_pH1N1") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -257,7 +259,7 @@ p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="Tregs_Ad-HA/NP") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -280,7 +282,7 @@ p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="Tregs_Ad-HA/NP+Ad-IL1b") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -323,7 +325,7 @@ p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpres
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD8TCells_pH1N1") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -346,7 +348,7 @@ p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD8TCells_Ad-HA/NP") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -369,7 +371,7 @@ p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD8TCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -411,7 +413,7 @@ p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpres
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD4TCells_pH1N1") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -434,7 +436,7 @@ p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD4TCells_Ad-HA/NP") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -457,7 +459,7 @@ p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD4TCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -500,7 +502,7 @@ p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpres
   theme_minimal() +
   geom_text_repel() +
   labs(title="BCells_pH1N1") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -523,7 +525,7 @@ p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="BCells_Ad-HA/NP") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -546,7 +548,7 @@ p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="BCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -588,7 +590,7 @@ p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpres
   theme_minimal() +
   geom_text_repel() +
   labs(title="Macrophages_pH1N1") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -611,7 +613,7 @@ p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="Macrophages_Ad-HA/NP") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -634,7 +636,7 @@ p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpress
   theme_minimal() +
   geom_text_repel() +
   labs(title="Macrophages_Ad-HA/NP+Ad-IL1b") +
-  xlim(-1.5, 1.5) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -723,7 +725,7 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD8T_Cells_IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -763,7 +765,7 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD8T_Cells_IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -803,7 +805,7 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
   theme_minimal() +
   geom_text_repel() +
   labs(title="CD4T_Cells_IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -843,7 +845,7 @@ ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, la
   theme_minimal() +
   geom_text_repel() +
   labs(title="B_Cells_IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
@@ -887,13 +889,15 @@ library(terra)
 library(proj4)
 library(rgeos)
 library(eulerr)
-library(venndir)
+
 
 x = list(Macrophages=IL1b_Macrophages_genes, CD4_T_Cells=IL1b_CD4_genes, CD8_T_Cells=IL1b_CD8_genes, B_Cells=IL1b_BCells_genes)
 
+library(venndir)
 options("warn"=-1)
 setlist <- make_venn_test(100, 3)
 venndir(setlist)
+
 
 venndir(x)
 
@@ -918,11 +922,12 @@ venndir(x,
 
 
 ```
+
 GO enrichment of differentially expressed genes
 ```{r GO}
 library(topGO)
 library(org.Ss.eg.db)
-
+#test run
 test_genes <- as.factor(as.numeric(rownames(sce_all_filt) %in% PH1N1_CD8_genes))
 names(test_genes) <- rownames(sce_all_filt)
 test_GO <- new("topGOdata", ontology = "BP", allGenes = test_genes, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
@@ -935,21 +940,22 @@ resultKS.elim <- runTest(test_GO, algorithm = "elim", statistic = "ks")
 
 test_GO_Results <- GenTable(test_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
 
+#calculate for all differential gene lists
+ID_List <- c("HANP_broad_genes", "HANP_BCells_genes", "HANP_CD4_genes", "HANP_CD8_genes", "HANP_Macrophages_genes", "IFI6_broad_genes", "IFI6_BCells_genes", "IFI6_CD4_genes", "IFI6_CD8_genes", "IFI6_Macrophages_genes", "IL1b_broad_genes", "IL1b_BCells_genes", "IL1b_CD4_genes", "IL1b_CD8_genes", "IL1b_Macrophages_genes", "PH1N1_broad_genes", "PH1N1_BCells_genes", "PH1N1_CD4_genes", "PH1N1_CD8_genes", "PH1N1_Macrophages_genes")
+Gene_Lists <- list(HANP_broad_genes, HANP_BCells_genes, HANP_CD4_genes, HANP_CD8_genes, HANP_Macrophages_genes, IFI6_broad_genes, IFI6_BCells_genes, IFI6_CD4_genes, IFI6_CD8_genes, IFI6_Macrophages_genes, IL1b_broad_genes, IL1b_BCells_genes, IL1b_CD4_genes, IL1b_CD8_genes, IL1b_Macrophages_genes, PH1N1_broad_genes, PH1N1_BCells_genes, PH1N1_CD4_genes, PH1N1_CD8_genes, PH1N1_Macrophages_genes)
 n <- 0
-ID_List <- c("HANP_BCells_genes", "HANP_CD4_genes", "HANP_CD8_genes", "HANP_Macrophages_genes", "IFI6_BCells_genes", "IFI6_CD4_genes", "IFI6_CD8_genes", "IFI6_Macrophages_genes", "IL1b_BCells_genes", "IL1b_CD4_genes", "IL1b_CD8_genes", "IL1b_Macrophages_genes", "PH1N1_BCells_genes", "PH1N1_CD4_genes", "PH1N1_CD8_genes", "PH1N1_Macrophages_genes")
-
-for (genelist in c(HANP_BCells_genes, HANP_CD4_genes, HANP_CD8_genes, HANP_Macrophages_genes, IFI6_BCells_genes, IFI6_CD4_genes, IFI6_CD8_genes, IFI6_Macrophages_genes, IL1b_BCells_genes, IL1b_CD4_genes, IL1b_CD8_genes, IL1b_Macrophages_genes, PH1N1_BCells_genes, PH1N1_CD4_genes, PH1N1_CD8_genes, PH1N1_Macrophages_genes)){
+for (genelist in Gene_Lists){
   n <- n + 1
   if (length(genelist) == 0) next
   gene_factor <- as.factor(as.numeric(rownames(sce_all_filt) %in% genelist))
   names(gene_factor) <- rownames(sce_all_filt)
-  GO_ont <- new("topGOdata", ontology = "BP", allGenes = gene_factor, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
-  resultFisher <- runTest(test_GO, algorithm = "classic", statistic = "fisher")
-  resultKS <- runTest(test_GO, algorithm = "classic", statistic = "ks")
-  resultKS.elim <- runTest(test_GO, algorithm = "elim", statistic = "ks")
-  GO_Results <- GenTable(test_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
+  GO_ont <- new("topGOdata", ontology = "BP", allGenes = gene_factor, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol", nodeSize=5)
+  resultFisher <- runTest(GO_ont, algorithm = "classic", statistic = "fisher")
+  resultKS <- runTest(GO_ont, algorithm = "classic", statistic = "ks")
+  resultKS.elim <- runTest(GO_ont, algorithm = "elim", statistic = "ks")
+  GO_Results <- GenTable(GO_ont, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=200, topNodes=20)
   ID <- ID_List[n]
-  write.table(GO_Results, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE)
+  write.table(GO_Results, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
 }
 
 ```
