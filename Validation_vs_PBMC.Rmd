@@ -726,6 +726,26 @@ heatmap.2(C20_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="
 dev.off()
 
 ```
+# Gene expression dotplots
+```{r dotplots, eval=FALSE}
+# B cells
+BAL_B_cells <- corrected_BAL[rownames(corrected_BAL) %in% B_Cell_genes, ]
+BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
+PBMC_B_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% B_Cell_genes, ]
+PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("8", "16")]
+identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
+rowData(BAL_B_cells)$scmap_features <- NULL
+rowData(PBMC_B_cells)$scmap_features <- NULL
+cbind(BAL_B_cells, PBMC_B_cells)
+
+
+
+plotDots(BAL_B_cells, features=B_Cell_genes, group="verbose_cluster")
+
+
+```
+
+
 
 # Wrapping up
 
