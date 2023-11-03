@@ -906,7 +906,7 @@ venndir(x,
 ```
 
 GO enrichment of differentially expressed genes
-```{r GO}
+```{r GO, eval=FALSE}
 library(topGO)
 library(org.Ss.eg.db)
 #test run
@@ -941,6 +941,14 @@ for (genelist in Gene_Lists){
 }
 
 ```
+
+make plots based on GO results
+```{r GOplots, eval=FALSE}
+library(GOplot)
+
+
+```
+
 
 # Wrapping up
 

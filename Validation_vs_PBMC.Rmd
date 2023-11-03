@@ -726,22 +726,64 @@ heatmap.2(C20_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="
 dev.off()
 
 ```
-# Gene expression dotplots
-```{r dotplots, eval=FALSE}
+# Gene expression bubbleplots (dotplots)
+```{r bubbleplots, eval=FALSE}
+library(gridExtra)
+theme_set(theme_minimal(base_size = 14))
 # B cells
 BAL_B_cells <- corrected_BAL[rownames(corrected_BAL) %in% B_Cell_genes, ]
 BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
 PBMC_B_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% B_Cell_genes, ]
 PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("8", "16")]
-identical(rownames(PBMC_B_cells), rownames(BAL_B_cells))
 rowData(BAL_B_cells)$scmap_features <- NULL
 rowData(PBMC_B_cells)$scmap_features <- NULL
-cbind(BAL_B_cells, PBMC_B_cells)
+colData(BAL_B_cells)$cluster <- NULL
+colData(PBMC_B_cells)$seurat_clusters <- NULL
+Combined_B_Cells <- cbind(BAL_B_cells, PBMC_B_cells)
 
+p1 <- plotDots(Combined_B_Cells, features=rownames(Combined_B_Cells), group="verbose_cluster") +
+  theme(aspect.ratio = 4, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank())
 
+# T cells 
 
-plotDots(BAL_B_cells, features=B_Cell_genes, group="verbose_cluster")
+BAL_T_cells <- corrected_BAL[rownames(corrected_BAL) %in% T_cell_genes, ]
+BAL_T_cells <- BAL_T_cells[, BAL_T_cells$cluster %in% c("6", "7", "10")]
+PBMC_T_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% T_cell_genes, ]
+PBMC_T_cells <- PBMC_T_cells[, PBMC_T_cells$seurat_clusters %in% c("4", "21", "28")]
+rowData(BAL_T_cells)$scmap_features <- NULL
+rowData(PBMC_T_cells)$scmap_features <- NULL
+colData(BAL_T_cells)$cluster <- NULL
+colData(PBMC_T_cells)$seurat_clusters <- NULL
+Combined_T_Cells <- cbind(BAL_T_cells, PBMC_T_cells)
 
+p2 <- plotDots(Combined_T_Cells, features=rownames(Combined_T_Cells), group="verbose_cluster") + 
+  theme(aspect.ratio = 4, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank())
+
+png(filename='Results/Bubbleplot_T_and_B.png', height=2160, width=540)
+grid.arrange(p1, p2, ncol=1)
+dev.off()
+
+## Everything bubbleplot
+#reorder axis's using heatmap dendrogram
+pp <- heatmap.2(heat_all_Matrix, scale="row")
+rowIndex <- pp$rowInd
+colIndex <- pp$colInd
+
+sce1 <- corrected_BAL
+sce2 <- corrected_PBMC
+rowData(sce1)$scmap_features <- NULL
+rowData(sce2)$scmap_features <- NULL
+colData(sce1)$cluster <- NULL
+colData(sce2)$seurat_clusters <- NULL
+Combined_sce <- cbind(sce1, sce2)
+
+png(filename='Results/bubbleplot_scmap_all.png', height=3840, width=3840)
+plotDots(Combined_sce, features=rownames(heat_all_Matrix), group="verbose_cluster", color=turbo(256)) +
+  theme_minimal(base_size = 50) +
+  theme(aspect.ratio = 1, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank(), legend.key.size = unit(2, 'cm'), axis.text.y=element_text(size=10)) +
+  scale_y_discrete(limits=rownames(heat_all_Matrix)[rowIndex]) +
+  scale_x_discrete(limits=colnames(heat_all_Matrix)[colIndex])
+dev.off()
 
 ```
 
