@@ -159,9 +159,7 @@ colData(sce_filt)[,c('named_cluster', 'long_named_cluster', 'main_clusters', 've
 ```
 
 And make some UMAPs.
-
 ```{r}
-
 legend_colours <- BAL_colour_list
 names(legend_colours) <- sce_all_filt$long_named_cluster
 legend_colours <- legend_colours[!duplicated(names(legend_colours))]
@@ -213,6 +211,37 @@ plot1 <- plotUMAP(sce_filt, point_size=0) +
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 ```
+and a FOXP3 UMAP
+```{r, eval=FALSE}
+library(viridis)
+#FOXP3 = "ENSSSCG00000012300"
+sce_FOXP3 <- sce_filt
+
+names(rowData(sce_FOXP3))[which(names(rowData(sce_FOXP3))=="start")]="gene_start"
+names(rowData(sce_FOXP3))[which(names(rowData(sce_FOXP3))=="end")]="gene_end"
+range(as.vector(logcounts(sce_FOXP3['ENSSSCG00000012300' ,])))
+range(as.vector(assay(sce_FOXP3['ENSSSCG00000012300' ,], "reconstructed")))
+
+png(filename='Results/UMAP_FOXP3.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.02))
+dev.off()
+
+# delete cells that show no FOXP3 expression
+
+sce_FOXP3 <- sce_FOXP3[, assay(sce_FOXP3, "reconstructed")['ENSSSCG00000012300', ] > 0.001]
+
+png(filename='Results/UMAP_FOXP3_thin.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = turbo(20), limits=c(0,0.01))
+dev.off()
+
+rm(sce_FOXP3)
+
+```
+
 And a TSNE for supplementary
 ```{r}
 png(filename='Results/TSNE_named_and_unnumbered_clusters.png', height=1080, width=2160)
@@ -276,6 +305,7 @@ plotDots(defining_sce, features=rownames(defining_sce), group="long_named_cluste
   scale_x_discrete(limits=colnames(defining_matrix)[colIndex])
 dev.off()
 ```
+
 
 Based on the sorting strategy used, we did not intend to capture CD16+ cells (incl NK cells and NK-cell-like T cells) or epithelial cells. For this reason, we are reluctant to run differential analyses on clusters 9 (NK and NK-like CD8+ Ts) and cluster 19 (epithelial cells) as these are likely a biased set of cells within these phenotypes that snuck through the sorts. We will therefore exclude these clusters as well.
 

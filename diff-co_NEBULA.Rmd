@@ -48,17 +48,9 @@ unique(sce_all_filt$condition)
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="start")]="gene_start"
 names(rowData(sce_all_filt))[which(names(rowData(sce_all_filt))=="end")]="gene_end"
 
-# Restrict to selected cell types
-#sce_all_filt <- sce_all_filt[, sce_all_filt$cluster %in% c("1", "4", "8" , "12", "16", "7"," 20a", "10", "18b", "6", "20b", "18a", "9a", "9b", "9c")]
-
 #Redo normalisation as logcounts now that clusters have been removed
 sce_all_filt <- computePooledFactors(sce_all_filt, clusters=sce_all_filt$cluster, assay.type="counts")
 sce_all_filt <- logNormCounts(sce_all_filt)
-
-# Get top HVGs, batch corrected for sex, subset dataset
-#varmod <- modelGeneVar(sce_all_filt, block=sce_all_filt$sex)
-#top_HVGs <- getTopHVGs(varmod, n=1000)
-#sce_all_filt <- sce_all_filt[rownames(sce_all_filt) %in% top_HVGs, ]
 
 # Swap ENSEMBL IDs for HGNC where possible for easy visualization
 rownames(sce_all_filt) <- rowData(sce_all_filt)$Symbol
@@ -75,132 +67,98 @@ numcores <- detectCores()-2
 # Set gglot settings
 theme_set(theme_minimal(base_size = 20))
 ```
+create functions to automate processes
+```{r functions}
+#run NEBULA
+run_NEBULA <- function(SCE, predictors, pred_string) {
+  scedata <- scToNeb(obj = SCE, id = "Sample", pred = predictors, offset="sum_counts")
+  df = model.matrix(pred_string, data=scedata$pred)
+  re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
+  return(re)
+}
+# modify dataframe of results
+mod_data <- function(df_re) {
+  names(df_re) <- c("ID", "logFC", "AveExpr", "adj.P.Val")
+  # add a column of NAs
+  df_re$diffexpressed <- "NO"
+  # if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+  df_re$diffexpressed[df_re$logFC > 0.6 & df_re$adj.P.Val < 0.05] <- "UP"
+  # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+  df_re$diffexpressed[df_re$logFC < -0.6 & df_re$adj.P.Val < 0.05] <- "DOWN"
+  df_re$delabel <- NA
+  df_re$delabel[df_re$diffexpressed != "NO"] <- df_re$gene[df_re$diffexpressed != "NO"]
+  # Set p-value floor
+  df_re$p_value[df_re$adj.P.Val <= 1.0e-300] <- 1.0e-300
+  return(df_re)
+}
+#  Create volcano plot
+plot_volcano <- function(df_re, title) {
+  ggplot(data=df_re, aes(x = logFC, y = -log10(adj.P.Val), col=diffexpressed, label=delabel)) + 
+  geom_point() + 
+  geom_text_repel(size=5) +
+  labs(title=title) +
+  xlim(-3, 3) + ylim(0, ceiling(max(-log10(df_re$adj.P.Val)))) + 
+  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+}
+
+test_func <- function(x) {
+  y <- x+1
+  return(y)
+}
+test_func(x=1)
+z <- test_func(x=2)
+
+```
 
 try all cells all genes
 ```{r broad-condition}
-scedata <- scToNeb(obj = sce_all_filt, id = "Sample", pred = c("named_cluster", "condition"), offset="sum_counts")
-
-df = model.matrix(~named_cluster+condition, data=scedata$pred)
-
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
-
-re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
+broad_re <- run_NEBULA(SCE=sce_all_filt, predictors=c("named_cluster", "condition"), pred_string=~named_cluster+condition)
 
 # Condition-Infected
-PH1N1_Data <- data.frame(re$summary$gene, re$summary$logFC_conditionpH1N1, re$summary$se_conditionpH1N1, p.adjust(re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
-PH1N1_broad_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
+PH1N1_broad_Data <- data.frame(broad_re$summary$gene, broad_re$summary$logFC_conditionpH1N1, broad_re$summary$se_conditionpH1N1, p.adjust(broad_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_broad_Data <- mod_data(PH1N1_broad_Data)
+PH1N1_broad_genes <- PH1N1_broad_Data$delabel[!is.na(PH1N1_broad_Data$delabel)]
 
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="all cells, pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_broad_Data, title="all cells, pH1N1")
 
 # Condition-Vaccinated+IL1b
-IL1b_Data <- data.frame(re$summary$gene, re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-IL1b_broad_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
+IL1b_broad_Data <- data.frame(broad_re$summary$gene, broad_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, broad_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(broad_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_broad_Data <- mod_data(IL1b_broad_Data)
+IL1b_broad_genes <- IL1b_broad_Data$delabel[!is.na(IL1b_broad_Data$delabel)]
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="all cells, Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p2 <- plot_volcano(df_re=IL1b_broad_Data, title="all cells, Ad-HA/NP+Ad-IL1b")
 
 # vaccinated
-HANP_Data <- data.frame(re$summary$gene, re$summary$`logFC_conditionAd-HA/NP`, re$summary$`se_conditionAd-HA/NP`, p.adjust(re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-HANP_broad_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
+HANP_broad_Data <- data.frame(broad_re$summary$gene, broad_re$summary$`logFC_conditionAd-HA/NP`, broad_re$summary$`se_conditionAd-HA/NP`, p.adjust(broad_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_broad_Data <- mod_data(HANP_broad_Data)
+HANP_broad_genes <- HANP_broad_Data$delabel[!is.na(HANP_broad_Data$delabel)]
 
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="all cells, Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_broad_Data, title="all cells, Ad-HA/NP")
 
-
+#plot and save
 png(filename='Results/NEBULA_broad_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
 ```
+
 see correlates with IFI6
 ```{r broad-IFI6}
-IFI6_SCE <- sce_all_filt[!rownames(sce_all_filt) %in% c('IFI6') ,]
+IFI6_broad_SCE <- sce_all_filt[!rownames(sce_all_filt) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("named_cluster", "IFI6_logcounts"), offset="sum_counts")
-
-df = model.matrix(~named_cluster+IFI6_logcounts, data=scedata$pred)
-
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
-
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-save(list=ls(), file='Data/broad_NEBULA.RData')
+IFI6_broad_re <- run_NEBULA(SCE=IFI6_broad_SCE, predictors=c("named_cluster", "IFI6_logcounts"), pred_string=~named_cluster+IFI6_logcounts)
 
 # plot IFI6
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-IFI6_broad_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
+IFI6_broad_Data <- data.frame(IFI6_broad_re$summary$gene, IFI6_broad_re$summary$logFC_IFI6_logcounts, IFI6_broad_re$summary$se_IFI6_logcounts, p.adjust(IFI6_broad_re$summary$p_IFI6_logcounts, "BH"))
+IFI6_broad_Data <- mod_data(IFI6_broad_Data)
+IFI6_broad_genes <- IFI6_broad_Data$delabel[!is.na(IFI6_broad_Data$delabel)]
 
 png(filename='Results/NEBULA_broad_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="IFI6") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+plot_volcano(df_re=IFI6_broad_Data, title="all cells, IFI6")
 dev.off()
 ```
+
 ```{r broad-save}
 save(list=ls(), file='Data/broad_NEBULA.RData')
 ```
@@ -209,428 +167,172 @@ Now try specifically for Tregs
 ```{r NEBULA-Tregs}
 Tregs_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("10")]
 # Remove zero genes
-Tregs_dataSCE = Tregs_dataSCE[rowSums(counts(Tregs_dataSCE)) != 0, ]
+Tregs_dataSCE <- Tregs_dataSCE[rowSums(counts(Tregs_dataSCE)) != 0, ]
 
-Tregs_data <- scToNeb(obj = Tregs_dataSCE, id = "Sample", pred = c("condition"), offset="sum_counts")
-
-Tregs_df = model.matrix(~condition, data=Tregs_data$pred)
-
-data_g = group_cell(count=Tregs_data$count, id=Tregs_data$id, pred=Tregs_df, offset=Tregs_data$offset)
-is.null(data_g)
-
-Tregs_re = nebula(Tregs_data$count, Tregs_data$id, pred=Tregs_df, offset=Tregs_data$offset, method='HL', ncore=numcores)
+Tregs_re <- run_NEBULA(SCE=Tregs_dataSCE, predictors=c("condition"), pred_string=~condition)
 
 # Tregs Infected
-PH1N1_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$logFC_conditionpH1N1, Tregs_re$summary$se_conditionpH1N1, p.adjust(Tregs_re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
+PH1N1_Tregs_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$logFC_conditionpH1N1, Tregs_re$summary$se_conditionpH1N1, p.adjust(Tregs_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_Tregs_Data <- mod_data(PH1N1_Tregs_Data)
 
-
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Tregs_pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_Tregs_Data, title="Tregs, pH1N1")
 
 # Tregs vaccinated
-HANP_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$`logFC_conditionAd-HA/NP`, Tregs_re$summary$`se_conditionAd-HA/NP`, p.adjust(Tregs_re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
+HANP_Tregs_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$`logFC_conditionAd-HA/NP`, Tregs_re$summary$`se_conditionAd-HA/NP`, p.adjust(Tregs_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_Tregs_Data <- mod_data(HANP_Tregs_Data)
 
-
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Tregs_Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_Tregs_Data, title="Tregs, Ad-HA/NP")
 
 # Tregs Vaccinated+IL1b
-IL1b_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, Tregs_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(Tregs_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
+IL1b_Tregs_Data <- data.frame(Tregs_re$summary$gene, Tregs_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, Tregs_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(Tregs_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_Tregs_Data <- mod_data(IL1b_Tregs_Data)
 
+p2 <- plot_volcano(df_re=IL1b_Tregs_Data, title="Tregs, Ad-HA/NP+Ad-IL1b")
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Tregs_Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
-
+# Plot and save
 png(filename='Results/NEBULA_Treg_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
-
 ```
+
 CD8 T cells
 ```{r NEBULA-CD8Tcells}
 CD8TCells_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("6", "18a", "20b")]
 # Remove zero genes
-CD8TCells_dataSCE = CD8TCells_dataSCE[rowSums(counts(CD8TCells_dataSCE)) != 0, ]
+CD8TCells_dataSCE <- CD8TCells_dataSCE[rowSums(counts(CD8TCells_dataSCE)) != 0, ]
 
-CD8TCells_data <- scToNeb(obj = CD8TCells_dataSCE, id = "Sample", pred = c("condition"), offset="sum_counts")
-
-CD8TCells_df = model.matrix(~condition, data=CD8TCells_data$pred)
-
-CD8TCells_data_g = group_cell(count=CD8TCells_data$count, id=CD8TCells_data$id, pred=CD8TCells_df, offset=CD8TCells_data$offset)
-is.null(CD8TCells_data_g)
-
-CD8TCells_re = nebula(CD8TCells_data$count, CD8TCells_data$id, pred=CD8TCells_df, offset=CD8TCells_data$offset, method='HL', ncore=numcores)
+CD8TCells_re <- run_NEBULA(SCE=CD8TCells_dataSCE, predictors=c("condition"), pred_string=~condition)
 
 # CD8TCells Infected
-PH1N1_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$logFC_conditionpH1N1, CD8TCells_re$summary$se_conditionpH1N1, p.adjust(CD8TCells_re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
-PH1N1_CD8_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
+PH1N1_CD8TCells_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$logFC_conditionpH1N1, CD8TCells_re$summary$se_conditionpH1N1, p.adjust(CD8TCells_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_CD8TCells_Data <- mod_data(PH1N1_CD8TCells_Data)
+PH1N1_CD8_genes <- PH1N1_CD8TCells_Data$delabel[!is.na(PH1N1_CD8TCells_Data$delabel)]
 
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD8TCells_pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_CD8TCells_Data, title="CD8 T Cells, pH1N1")
 
 # CD8TCells vaccinated
-HANP_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$`logFC_conditionAd-HA/NP`, CD8TCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(CD8TCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-HANP_CD8_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
+HANP_CD8TCells_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$`logFC_conditionAd-HA/NP`, CD8TCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(CD8TCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_CD8TCells_Data <- mod_data(HANP_CD8TCells_Data)
+HANP_CD8_genes <- HANP_CD8TCells_Data$delabel[!is.na(HANP_CD8TCells_Data$delabel)]
 
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD8TCells_Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_CD8TCells_Data, title="CD8 T Cells, Ad-HA/NP")
 
 # CD8TCells Vaccinated+IL1b
-IL1b_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, CD8TCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(CD8TCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-IL1b_CD8_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
+IL1b_CD8TCells_Data <- data.frame(CD8TCells_re$summary$gene, CD8TCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, CD8TCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(CD8TCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_CD8TCells_Data <- mod_data(IL1b_CD8TCells_Data)
+IL1b_CD8_genes <- IL1b_CD8TCells_Data$delabel[!is.na(IL1b_CD8TCells_Data$delabel)]
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD8TCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p2 <- plot_volcano(df_re=IL1b_CD8TCells_Data, title="CD8 T Cells, Ad-HA/NP+Ad-IL1b")
 
 png(filename='Results/NEBULA_CD8TCells_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
+
 ```
+
 CD4 T cells
 ```{r NEBULA-CD4Tcells}
 CD4TCells_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("7", "10", "18b", "20a")]
 # Remove zero genes
-CD4TCells_dataSCE = CD4TCells_dataSCE[rowSums(counts(CD4TCells_dataSCE)) != 0, ]
+CD4TCells_dataSCE <- CD4TCells_dataSCE[rowSums(counts(CD4TCells_dataSCE)) != 0, ]
 
-CD4TCells_data <- scToNeb(obj = CD4TCells_dataSCE, id = "Sample", pred = c("condition"), offset="sum_counts")
-
-CD4TCells_df = model.matrix(~condition, data=CD4TCells_data$pred)
-
-CD4TCells_data_g = group_cell(count=CD4TCells_data$count, id=CD4TCells_data$id, pred=CD4TCells_df, offset=TCells_data$offset)
-is.null(CD4TCells_data_g)
-
-CD4TCells_re = nebula(CD4TCells_data$count, CD4TCells_data$id, pred=CD4TCells_df, offset=CD4TCells_data$offset, method='HL', ncore=numcores)
+CD4TCells_re <- run_NEBULA(SCE=CD4TCells_dataSCE, predictors=c("condition"), pred_string=~condition)
 
 # CD4TCells Infected
-PH1N1_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$logFC_conditionpH1N1, CD4TCells_re$summary$se_conditionpH1N1, p.adjust(CD4TCells_re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
-PH1N1_CD4_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
+PH1N1_CD4TCells_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$logFC_conditionpH1N1, CD4TCells_re$summary$se_conditionpH1N1, p.adjust(CD4TCells_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_CD4TCells_Data <- mod_data(PH1N1_CD4TCells_Data)
+PH1N1_CD4_genes <- PH1N1_CD4TCells_Data$delabel[!is.na(PH1N1_CD4TCells_Data$delabel)]
 
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD4TCells_pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_CD4TCells_Data, title="CD4 T Cells, pH1N1")
 
 # CD4TCells vaccinated
-HANP_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$`logFC_conditionAd-HA/NP`, CD4TCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(CD4TCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-HANP_CD4_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
+HANP_CD4TCells_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$`logFC_conditionAd-HA/NP`, CD4TCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(CD4TCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_CD4TCells_Data <- mod_data(HANP_CD4TCells_Data)
+HANP_CD4_genes <- HANP_CD4TCells_Data$delabel[!is.na(HANP_CD4TCells_Data$delabel)]
 
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD4TCells_Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_CD4TCells_Data, title="CD4 T Cells, Ad-HA/NP")
 
 # CD4TCells Vaccinated+IL1b
-IL1b_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, CD4TCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(CD4TCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-IL1b_CD4_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
+IL1b_CD4TCells_Data <- data.frame(CD4TCells_re$summary$gene, CD4TCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, CD4TCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(CD4TCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_CD4TCells_Data <- mod_data(IL1b_CD4TCells_Data)
+IL1b_CD4_genes <- IL1b_CD4TCells_Data$delabel[!is.na(IL1b_CD4TCells_Data$delabel)]
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD4TCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p2 <- plot_volcano(df_re=IL1b_CD4TCells_Data, title="CD4 T Cells, Ad-HA/NP+Ad-IL1b")
 
 png(filename='Results/NEBULA_CD4TCells_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
+
 ```
 
 B cells
 ```{r NEBULA-BCells}
 BCells_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("12", "16")]
 # Remove zero genes
-BCells_dataSCE = BCells_dataSCE[rowSums(counts(BCells_dataSCE)) != 0, ]
+BCells_dataSCE <- BCells_dataSCE[rowSums(counts(BCells_dataSCE)) != 0, ]
 
-BCells_data <- scToNeb(obj = BCells_dataSCE, id = "Sample", pred = c("condition"), offset="sum_counts")
-
-BCells_df = model.matrix(~condition, data=BCells_data$pred)
-
-BCells_data_g = group_cell(count=BCells_data$count, id=BCells_data$id, pred=BCells_df, offset=BCells_data$offset)
-is.null(BCells_data_g)
-
-BCells_re = nebula(BCells_data$count, BCells_data$id, pred=BCells_df, offset=BCells_data$offset, method='HL', ncore=numcores)
+BCells_re <- run_NEBULA(SCE=BCells_dataSCE, predictors=c("condition"), pred_string=~condition)
 
 # BCells Infected
-PH1N1_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$logFC_conditionpH1N1, BCells_re$summary$se_conditionpH1N1, p.adjust(BCells_re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
-PH1N1_BCells_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
+PH1N1_BCells_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$logFC_conditionpH1N1, BCells_re$summary$se_conditionpH1N1, p.adjust(BCells_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_BCells_Data <- mod_data(PH1N1_BCells_Data)
+PH1N1_BCells_genes <- PH1N1_BCells_Data$delabel[!is.na(PH1N1_BCells_Data$delabel)]
 
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="BCells_pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_BCells_Data, title="B Cells, pH1N1")
 
 # BCells vaccinated
-HANP_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$`logFC_conditionAd-HA/NP`, BCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(BCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-HANP_BCells_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
+HANP_BCells_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$`logFC_conditionAd-HA/NP`, BCells_re$summary$`se_conditionAd-HA/NP`, p.adjust(BCells_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_BCells_Data <- mod_data(HANP_BCells_Data)
+HANP_BCells_genes <- HANP_BCells_Data$delabel[!is.na(HANP_BCells_Data$delabel)]
 
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="BCells_Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_BCells_Data, title="B Cells, Ad-HA/NP")
 
 # BCells Vaccinated+IL1b
-IL1b_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, BCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(BCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-IL1b_BCells_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
+IL1b_BCells_Data <- data.frame(BCells_re$summary$gene, BCells_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, BCells_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(BCells_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_BCells_Data <- mod_data(IL1b_BCells_Data)
+IL1b_BCells_genes <- IL1b_BCells_Data$delabel[!is.na(IL1b_BCells_Data$delabel)]
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="BCells_Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p2 <- plot_volcano(df_re=IL1b_BCells_Data, title="B Cells, Ad-HA/NP+Ad-IL1b")
 
 png(filename='Results/NEBULA_BCells_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
+
 ```
+
 Macrophages
 ```{r NEBULA-Macrophages}
 Macrophages_dataSCE <- sce_all_filt[, sce_all_filt$cluster %in% c("1", "4", "8")]
 # Remove zero genes
-Macrophages_dataSCE = Macrophages_dataSCE[rowSums(counts(Macrophages_dataSCE)) != 0, ]
+Macrophages_dataSCE <- Macrophages_dataSCE[rowSums(counts(Macrophages_dataSCE)) != 0, ]
 
-Macrophages_data <- scToNeb(obj = Macrophages_dataSCE, id = "Sample", pred = c("condition"), offset="sum_counts")
-
-Macrophages_df = model.matrix(~condition, data=Macrophages_data$pred)
-
-Macrophages_data_g = group_cell(count=Macrophages_data$count, id=Macrophages_data$id, pred=Macrophages_df, offset=Macrophages_data$offset)
-is.null(Macrophages_data_g)
-
-Macrophages_re = nebula(Macrophages_data$count, Macrophages_data$id, pred=Macrophages_df, offset=Macrophages_data$offset, method='HL', ncore=numcores)
+Macrophages_re <- run_NEBULA(SCE=Macrophages_dataSCE, predictors=c("condition"), pred_string=~condition)
 
 # Macrophages Infected
-PH1N1_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$logFC_conditionpH1N1, Macrophages_re$summary$se_conditionpH1N1, p.adjust(Macrophages_re$summary$p_conditionpH1N1, "BH"))
-names(PH1N1_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-PH1N1_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$p_value < 0.05] <- "DOWN"
-PH1N1_Data$delabel <- NA
-PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$gene[PH1N1_Data$diffexpressed != "NO"]
-PH1N1_Macrophages_genes <- PH1N1_Data$delabel[!is.na(PH1N1_Data$delabel)]
+PH1N1_Macrophages_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$logFC_conditionpH1N1, Macrophages_re$summary$se_conditionpH1N1, p.adjust(Macrophages_re$summary$p_conditionpH1N1, "BH"))
+PH1N1_Macrophages_Data <- mod_data(PH1N1_Macrophages_Data)
+PH1N1_Macrophages_genes <- PH1N1_Macrophages_Data$delabel[!is.na(PH1N1_Macrophages_Data$delabel)]
 
-p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Macrophages_pH1N1") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(PH1N1_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p3 <- plot_volcano(df_re=PH1N1_Macrophages_Data, title="Macrophages, pH1N1")
 
 # Macrophages vaccinated
-HANP_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$`logFC_conditionAd-HA/NP`, Macrophages_re$summary$`se_conditionAd-HA/NP`, p.adjust(Macrophages_re$summary$`p_conditionAd-HA/NP`, "BH"))
-names(HANP_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-HANP_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$p_value < 0.05] <- "DOWN"
-HANP_Data$delabel <- NA
-HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$gene[HANP_Data$diffexpressed != "NO"]
-HANP_Macrophages_genes <- HANP_Data$delabel[!is.na(HANP_Data$delabel)]
+HANP_Macrophages_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$`logFC_conditionAd-HA/NP`, Macrophages_re$summary$`se_conditionAd-HA/NP`, p.adjust(Macrophages_re$summary$`p_conditionAd-HA/NP`, "BH"))
+HANP_Macrophages_Data <- mod_data(HANP_Macrophages_Data)
+HANP_Macrophages_genes <- HANP_Macrophages_Data$delabel[!is.na(HANP_Macrophages_Data$delabel)]
 
-p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Macrophages_Ad-HA/NP") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(HANP_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p1 <- plot_volcano(df_re=HANP_Macrophages_Data, title="Macrophages, Ad-HA/NP")
 
 # Macrophages Vaccinated+IL1b
-IL1b_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, Macrophages_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(Macrophages_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
-names(IL1b_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IL1b_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$p_value < 0.05] <- "DOWN"
-IL1b_Data$delabel <- NA
-IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$gene[IL1b_Data$diffexpressed != "NO"]
-IL1b_Macrophages_genes <- IL1b_Data$delabel[!is.na(IL1b_Data$delabel)]
+IL1b_Macrophages_Data <- data.frame(Macrophages_re$summary$gene, Macrophages_re$summary$`logFC_conditionAd-HA/NP+Ad-IL1b`, Macrophages_re$summary$`se_conditionAd-HA/NP+Ad-IL1b`, p.adjust(Macrophages_re$summary$`p_conditionAd-HA/NP+Ad-IL1b`, "BH"))
+IL1b_Macrophages_Data <- mod_data(IL1b_Macrophages_Data)
+IL1b_Macrophages_genes <- IL1b_Macrophages_Data$delabel[!is.na(IL1b_Macrophages_Data$delabel)]
 
-p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Macrophages_Ad-HA/NP+Ad-IL1b") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IL1b_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+p2 <- plot_volcano(df_re=IL1b_Macrophages_Data, title="Macrophages, Ad-HA/NP+Ad-IL1b")
 
 png(filename='Results/NEBULA_Macrophages_condition.png', height=1080, width=2160)
 grid.arrange(p1, p2, p3, nrow=1)
 dev.off()
+
 ```
 
 ```{r subset-save}
@@ -640,198 +342,70 @@ save(list=ls(), file='Data/NEBULA_subset_save.RData')
 cell subsets, IFI6
 ```{r IFI6-subsets}
 #Tregs IFI6
-IFI6_SCE <- Tregs_dataSCE[!rownames(Tregs_dataSCE) %in% c('IFI6') ,]
+IFI6_Tregs_SCE <- Tregs_dataSCE[!rownames(Tregs_dataSCE) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("IFI6_logcounts"), offset="sum_counts")
+IFI6_Tregs_re <- run_NEBULA(SCE=IFI6_Tregs_SCE, predictors=c("IFI6_logcounts"), pred_string=~IFI6_logcounts)
 
-df = model.matrix(~IFI6_logcounts, data=scedata$pred)
+IFI6_Tregs_Data <- data.frame(IFI6_Tregs_re$summary$gene, IFI6_Tregs_re$summary$logFC_IFI6_logcounts, IFI6_Tregs_re$summary$se_IFI6_logcounts, p.adjust(IFI6_Tregs_re$summary$p_IFI6_logcounts, "BH"))
 
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
-
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
-#plot
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
+IFI6_Tregs_Data <- mod_data(IFI6_Tregs_Data)
 
 png(filename='Results/NEBULA_Tregs_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Tregs_IFI6") +
-  xlim(-2, 2) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+plot_volcano(df_re=IFI6_Tregs_Data, title="Tregs, IFI6")
 dev.off()
 
-#Macrophages
-IFI6_SCE <- Macrophages_dataSCE[!rownames(Macrophages_dataSCE) %in% c('IFI6') ,]
+# Macrophages
+IFI6_Macrophages_SCE <- Macrophages_dataSCE[!rownames(Macrophages_dataSCE) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("IFI6_logcounts"), offset="sum_counts")
+IFI6_Macrophages_re <- run_NEBULA(SCE=IFI6_Macrophages_SCE, predictors=c("IFI6_logcounts"), pred_string=~IFI6_logcounts)
 
-df = model.matrix(~IFI6_logcounts, data=scedata$pred)
+IFI6_Macrophages_Data <- data.frame(IFI6_Macrophages_re$summary$gene, IFI6_Macrophages_re$summary$logFC_IFI6_logcounts, IFI6_Macrophages_re$summary$se_IFI6_logcounts, p.adjust(IFI6_Macrophages_re$summary$p_IFI6_logcounts, "BH"))
 
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
-
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
-# plot
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-IFI6_Macrophages_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
+IFI6_Macrophages_Data <- mod_data(IFI6_Macrophages_Data)
 
 png(filename='Results/NEBULA_Macrophages_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="Macrophages_Cells_IFI6") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+plot_volcano(df_re=IFI6_Macrophages_Data, title="Macrophages, IFI6")
 dev.off()
 
-#CD8T cells
-IFI6_SCE <- CD8TCells_dataSCE[!rownames(CD8TCells_dataSCE) %in% c('IFI6') ,]
+#CD8 T cells
+IFI6_CD8TCells_SCE <- CD8TCells_dataSCE[!rownames(CD8TCells_dataSCE) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("IFI6_logcounts"), offset="sum_counts")
+IFI6_CD8TCells_re <- run_NEBULA(SCE=IFI6_CD8TCells_SCE, predictors=c("IFI6_logcounts"), pred_string=~IFI6_logcounts)
 
-df = model.matrix(~IFI6_logcounts, data=scedata$pred)
+IFI6_CD8TCells_Data <- data.frame(IFI6_CD8TCells_re$summary$gene, IFI6_CD8TCells_re$summary$logFC_IFI6_logcounts, IFI6_CD8TCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_CD8TCells_re$summary$p_IFI6_logcounts, "BH"))
 
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
+IFI6_CD8TCells_Data <- mod_data(IFI6_CD8TCells_Data)
 
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
-# plot
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-IFI6_CD8_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
-
-png(filename='Results/NEBULA_CD8Tcells_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD8T_Cells_IFI6") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+png(filename='Results/NEBULA_CD8TCells_IFI6.png', height=1080, width=1080)
+plot_volcano(df_re=IFI6_CD8TCells_Data, title="CD8TCells, IFI6")
 dev.off()
 
-#CD4T cells
-IFI6_SCE <- CD4TCells_dataSCE[!rownames(CD4TCells_dataSCE) %in% c('IFI6') ,]
+#CD4 T cells
+IFI6_CD4TCells_SCE <- CD4TCells_dataSCE[!rownames(CD4TCells_dataSCE) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("IFI6_logcounts"), offset="sum_counts")
+IFI6_CD4TCells_re <- run_NEBULA(SCE=IFI6_CD4TCells_SCE, predictors=c("IFI6_logcounts"), pred_string=~IFI6_logcounts)
 
-df = model.matrix(~IFI6_logcounts, data=scedata$pred)
+IFI6_CD4TCells_Data <- data.frame(IFI6_CD4TCells_re$summary$gene, IFI6_CD4TCells_re$summary$logFC_IFI6_logcounts, IFI6_CD4TCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_CD4TCells_re$summary$p_IFI6_logcounts, "BH"))
 
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
+IFI6_CD4TCells_Data <- mod_data(IFI6_CD4TCells_Data)
 
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
-# plot
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-IFI6_CD4_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
-
-png(filename='Results/NEBULA_CD4Tcells_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="CD4T_Cells_IFI6") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+png(filename='Results/NEBULA_CD4TCells_IFI6.png', height=1080, width=1080)
+plot_volcano(df_re=IFI6_CD4TCells_Data, title="CD4TCells, IFI6")
 dev.off()
 
-#B cells
-IFI6_SCE <- BCells_dataSCE[!rownames(BCells_dataSCE) %in% c('IFI6') ,]
+# B cells
+IFI6_BCells_SCE <- BCells_dataSCE[!rownames(BCells_dataSCE) %in% c('IFI6') ,]
 
-scedata <- scToNeb(obj = IFI6_SCE, id = "Sample", pred = c("IFI6_logcounts"), offset="sum_counts")
+IFI6_BCells_re <- run_NEBULA(SCE=IFI6_BCells_SCE, predictors=c("IFI6_logcounts"), pred_string=~IFI6_logcounts)
 
-df = model.matrix(~IFI6_logcounts, data=scedata$pred)
+IFI6_BCells_Data <- data.frame(IFI6_BCells_re$summary$gene, IFI6_BCells_re$summary$logFC_IFI6_logcounts, IFI6_BCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_BCells_re$summary$p_IFI6_logcounts, "BH"))
 
-data_g = group_cell(count=scedata$count, id=scedata$id, pred=df, offset=scedata$offset)
-is.null(data_g)
-#re = nebula(data_g$count, data_g$id, pred=data_g$pred, offset=data_g$offset, ncore=numcores)
+IFI6_BCells_Data <- mod_data(IFI6_BCells_Data)
 
-IFI6_re = nebula(scedata$count, scedata$id, pred=df, offset=scedata$offset, method='HL', ncore=numcores)
-
-# plot
-IFI6_Data <- data.frame(IFI6_re$summary$gene, IFI6_re$summary$logFC_IFI6_logcounts, IFI6_re$summary$se_IFI6_logcounts, p.adjust(IFI6_re$summary$p_IFI6_logcounts, "BH"))
-names(IFI6_Data) <- c("gene", "logFC", "SE", "p_value")
-# add a column of NAs
-IFI6_Data$diffexpressed <- "NO"
-# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
-IFI6_Data$diffexpressed[IFI6_Data$logFC > 0.6 & IFI6_Data$p_value < 0.05] <- "UP"
-# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
-IFI6_Data$diffexpressed[IFI6_Data$logFC < -0.6 & IFI6_Data$p_value < 0.05] <- "DOWN"
-IFI6_Data$delabel <- NA
-IFI6_Data$delabel[IFI6_Data$diffexpressed != "NO"] <- IFI6_Data$gene[IFI6_Data$diffexpressed != "NO"]
-IFI6_BCells_genes <- IFI6_Data$delabel[!is.na(IFI6_Data$delabel)]
-# Set p-values floor
-IFI6_Data$p_value[IFI6_Data$p_value <= 1.0e-300] <- 1.0e-300
-
-png(filename='Results/NEBULA_Bcells_IFI6.png', height=1080, width=1080)
-ggplot(data=IFI6_Data, aes(x = logFC, y = -log10(p_value), col=diffexpressed, label=delabel)) + 
-  geom_point() + 
-  geom_text_repel(size=5) +
-  labs(title="B_Cells_IFI6") +
-  xlim(-3, 3) + ylim(0, ceiling(max(-log10(IFI6_Data$p_value)))) + 
-  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
-  geom_hline(yintercept=-log10(0.05), col="red") +
-  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+png(filename='Results/NEBULA_BCells_IFI6.png', height=1080, width=1080)
+plot_volcano(df_re=IFI6_BCells_Data, title="BCells, IFI6")
 dev.off()
+
 ```
 
 ```{r IFI6-save}
@@ -905,42 +479,55 @@ venndir(x,
 
 ```
 
-GO enrichment of differentially expressed genes
-```{r GO, eval=FALSE}
+create functions and run topGO enrichment on differentially expressed genes
+```{r GO-functions, eval=FALSE}
 library(topGO)
 library(org.Ss.eg.db)
-#test run
-test_genes <- as.factor(as.numeric(rownames(sce_all_filt) %in% PH1N1_CD8_genes))
-names(test_genes) <- rownames(sce_all_filt)
-test_GO <- new("topGOdata", ontology = "BP", allGenes = test_genes, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol")
-test_GO
 
-resultFisher <- runTest(test_GO, algorithm = "classic", statistic = "fisher")
+NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_broad_Data, IFI6_BCells_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data, IFI6_Macrophages_Data)
 
-resultKS <- runTest(test_GO, algorithm = "classic", statistic = "ks")
-resultKS.elim <- runTest(test_GO, algorithm = "elim", statistic = "ks")
+ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_Macrophages_Data")
 
-test_GO_Results <- GenTable(test_GO, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "elimKS", ranksOf = "classicFisher", topNodes = 10)
-
-#calculate for all differential gene lists
-ID_List <- c("HANP_broad_genes", "HANP_BCells_genes", "HANP_CD4_genes", "HANP_CD8_genes", "HANP_Macrophages_genes", "IFI6_broad_genes", "IFI6_BCells_genes", "IFI6_CD4_genes", "IFI6_CD8_genes", "IFI6_Macrophages_genes", "IL1b_broad_genes", "IL1b_BCells_genes", "IL1b_CD4_genes", "IL1b_CD8_genes", "IL1b_Macrophages_genes", "PH1N1_broad_genes", "PH1N1_BCells_genes", "PH1N1_CD4_genes", "PH1N1_CD8_genes", "PH1N1_Macrophages_genes")
-Gene_Lists <- list(HANP_broad_genes, HANP_BCells_genes, HANP_CD4_genes, HANP_CD8_genes, HANP_Macrophages_genes, IFI6_broad_genes, IFI6_BCells_genes, IFI6_CD4_genes, IFI6_CD8_genes, IFI6_Macrophages_genes, IL1b_broad_genes, IL1b_BCells_genes, IL1b_CD4_genes, IL1b_CD8_genes, IL1b_Macrophages_genes, PH1N1_broad_genes, PH1N1_BCells_genes, PH1N1_CD4_genes, PH1N1_CD8_genes, PH1N1_Macrophages_genes)
+# GO iteration
+DiffGenes <- function(allScore){
+  return(allScore < 0.05)
+  }
 n <- 0
-for (genelist in Gene_Lists){
+categories <- c("BP", "CC", "MF")
+category <- "BP"
+for (Data in NEBULA_Data) {
   n <- n + 1
-  if (length(genelist) == 0) next
-  gene_factor <- as.factor(as.numeric(rownames(sce_all_filt) %in% genelist))
-  names(gene_factor) <- rownames(sce_all_filt)
-  GO_ont <- new("topGOdata", ontology = "BP", allGenes = gene_factor, annot = annFUN.org, mapping = "org.Ss.eg.db", ID="symbol", nodeSize=5)
-  resultFisher <- runTest(GO_ont, algorithm = "classic", statistic = "fisher")
-  resultKS <- runTest(GO_ont, algorithm = "classic", statistic = "ks")
-  resultKS.elim <- runTest(GO_ont, algorithm = "elim", statistic = "ks")
-  GO_Results <- GenTable(GO_ont, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=200, topNodes=20)
+  geneList <- Data$adj.P.Val
+  names(geneList) <- Data$ID
+  GO_Data <- new("topGOdata", ontology=category, allGenes=geneList, geneSel=DiffGenes, nodeSize=10, annot=annFUN.org, mapping="org.Ss.eg.db", ID="symbol")
+  resultFisher <- runTest(GO_Data, algorithm = "classic", statistic = "fisher")
+  resultKS <- runTest(GO_Data, algorithm = "classic", statistic = "ks")
+  resultKS.elim <- runTest(GO_Data, algorithm = "elim", statistic = "ks")
+  GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=100)
+  colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
+  colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
+  GO_Results$category <- category 
+  #GO_Genes <- printGenes(GO_Data, whichTerms=GO_Results$Term, numChar=100)
   ID <- ID_List[n]
-  write.table(GO_Results, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
+  write.table(GO_Genes, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
 }
 
+# test GO
+geneList <- PH1N1_Macrophages_Data$adj.P.Val
+names(geneList) <- PH1N1_Macrophages_Data$ID
+GO_Data <- new("topGOdata", ontology=category, allGenes=geneList, geneSel=DiffGenes, nodeSize=10, annot=annFUN.org, mapping="org.Ss.eg.db", ID="symbol")
+resultFisher <- runTest(GO_Data, algorithm = "classic", statistic = "fisher")
+resultKS <- runTest(GO_Data, algorithm = "classic", statistic = "ks")
+resultKS.elim <- runTest(GO_Data, algorithm = "elim", statistic = "ks")
+GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=100)
+
+colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
+colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
+GO_Results$category <- category 
+#GO_Genes <- printGenes(object=GO_Data, whichTerms=GO_Results$Term, chip=annFUN.org, numChar=100)
+GO_Genes <- genesInTerm(GO_Data)
 ```
+
 
 make plots based on GO results
 ```{r GOplots, eval=FALSE}
