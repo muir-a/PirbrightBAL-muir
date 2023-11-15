@@ -86,7 +86,7 @@ mod_data <- function(df_re) {
   # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
   df_re$diffexpressed[df_re$logFC < -0.6 & df_re$adj.P.Val < 0.05] <- "DOWN"
   df_re$delabel <- NA
-  df_re$delabel[df_re$diffexpressed != "NO"] <- df_re$gene[df_re$diffexpressed != "NO"]
+  df_re$delabel[df_re$diffexpressed != "NO"] <- df_re$ID[df_re$diffexpressed != "NO"]
   # Set p-value floor
   df_re$p_value[df_re$adj.P.Val <= 1.0e-300] <- 1.0e-300
   return(df_re)
@@ -350,9 +350,9 @@ IFI6_Tregs_Data <- data.frame(IFI6_Tregs_re$summary$gene, IFI6_Tregs_re$summary$
 
 IFI6_Tregs_Data <- mod_data(IFI6_Tregs_Data)
 
-png(filename='Results/NEBULA_Tregs_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_Tregs_Data, title="Tregs, IFI6")
-dev.off()
+#png(filename='Results/NEBULA_Tregs_IFI6.png', height=1080, width=1080)
+#plot_volcano(df_re=IFI6_Tregs_Data, title="Tregs, IFI6")
+#dev.off()
 
 # Macrophages
 IFI6_Macrophages_SCE <- Macrophages_dataSCE[!rownames(Macrophages_dataSCE) %in% c('IFI6') ,]
@@ -363,9 +363,9 @@ IFI6_Macrophages_Data <- data.frame(IFI6_Macrophages_re$summary$gene, IFI6_Macro
 
 IFI6_Macrophages_Data <- mod_data(IFI6_Macrophages_Data)
 
-png(filename='Results/NEBULA_Macrophages_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_Macrophages_Data, title="Macrophages, IFI6")
-dev.off()
+#png(filename='Results/NEBULA_Macrophages_IFI6.png', height=1080, width=1080)
+#plot_volcano(df_re=IFI6_Macrophages_Data, title="Macrophages, IFI6")
+#dev.off()
 
 #CD8 T cells
 IFI6_CD8TCells_SCE <- CD8TCells_dataSCE[!rownames(CD8TCells_dataSCE) %in% c('IFI6') ,]
@@ -376,9 +376,9 @@ IFI6_CD8TCells_Data <- data.frame(IFI6_CD8TCells_re$summary$gene, IFI6_CD8TCells
 
 IFI6_CD8TCells_Data <- mod_data(IFI6_CD8TCells_Data)
 
-png(filename='Results/NEBULA_CD8TCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_CD8TCells_Data, title="CD8TCells, IFI6")
-dev.off()
+#png(filename='Results/NEBULA_CD8TCells_IFI6.png', height=1080, width=1080)
+#plot_volcano(df_re=IFI6_CD8TCells_Data, title="CD8TCells, IFI6")
+#dev.off()
 
 #CD4 T cells
 IFI6_CD4TCells_SCE <- CD4TCells_dataSCE[!rownames(CD4TCells_dataSCE) %in% c('IFI6') ,]
@@ -389,9 +389,9 @@ IFI6_CD4TCells_Data <- data.frame(IFI6_CD4TCells_re$summary$gene, IFI6_CD4TCells
 
 IFI6_CD4TCells_Data <- mod_data(IFI6_CD4TCells_Data)
 
-png(filename='Results/NEBULA_CD4TCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_CD4TCells_Data, title="CD4TCells, IFI6")
-dev.off()
+#png(filename='Results/NEBULA_CD4TCells_IFI6.png', height=1080, width=1080)
+#plot_volcano(df_re=IFI6_CD4TCells_Data, title="CD4TCells, IFI6")
+#dev.off()
 
 # B cells
 IFI6_BCells_SCE <- BCells_dataSCE[!rownames(BCells_dataSCE) %in% c('IFI6') ,]
@@ -402,9 +402,9 @@ IFI6_BCells_Data <- data.frame(IFI6_BCells_re$summary$gene, IFI6_BCells_re$summa
 
 IFI6_BCells_Data <- mod_data(IFI6_BCells_Data)
 
-png(filename='Results/NEBULA_BCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_BCells_Data, title="BCells, IFI6")
-dev.off()
+#png(filename='Results/NEBULA_BCells_IFI6.png', height=1080, width=1080)
+#plot_volcano(df_re=IFI6_BCells_Data, title="BCells, IFI6")
+#dev.off()
 
 ```
 
@@ -480,7 +480,7 @@ venndir(x,
 ```
 
 create functions and run topGO enrichment on differentially expressed genes
-```{r GO-functions, eval=FALSE}
+```{r GO-functions}
 library(topGO)
 library(org.Ss.eg.db)
 
@@ -495,6 +495,8 @@ DiffGenes <- function(allScore){
 n <- 0
 categories <- c("BP", "CC", "MF")
 category <- "BP"
+rm(All_GO_Results)
+All_GO_Results <- data.frame()
 for (Data in NEBULA_Data) {
   n <- n + 1
   geneList <- Data$adj.P.Val
@@ -503,15 +505,88 @@ for (Data in NEBULA_Data) {
   resultFisher <- runTest(GO_Data, algorithm = "classic", statistic = "fisher")
   resultKS <- runTest(GO_Data, algorithm = "classic", statistic = "ks")
   resultKS.elim <- runTest(GO_Data, algorithm = "elim", statistic = "ks")
-  GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=100)
-  colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
-  colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
+  GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=100, topNodes=20)
+  #colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
+  #colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
   GO_Results$category <- category 
-  #GO_Genes <- printGenes(GO_Data, whichTerms=GO_Results$Term, numChar=100)
   ID <- ID_List[n]
-  write.table(GO_Genes, paste0('Results/GO_Results_', ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
+  GO_Results$dataset <- ID
+  write.table(GO_Results, paste0('Results/GO_Results_', category, "_", ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
+  #if(n == 1)next
+  All_GO_Results <- rbind(All_GO_Results, GO_Results)
 }
 
+# bubbleplot
+theme_set(theme_minimal(base_size = 20))
+
+GO_pH1N1 <- All_GO_Results[grep("PH1N1", All_GO_Results$dataset),]
+GO_pH1N1$dataset <- factor(GO_pH1N1$dataset, levels=c("PH1N1_broad_Data", "PH1N1_Macrophages_Data", "PH1N1_CD4TCells_Data", "PH1N1_CD8TCells_Data", "PH1N1_BCells_Data"))
+
+png(filename='Results/GO_pH1N1.png', height=1080, width=1080)
+ggplot(GO_pH1N1, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
+    geom_point(alpha=0.7) + 
+  geom_text_repel(size=4) + 
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  geom_jitter(width = 0.2, height = 0) +
+  labs(color=NULL, size="count DE genes", title="pH1N1") + 
+  ylab("-log(p-value)") + xlab(NULL) +
+  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  guides(color="none") + 
+  scale_size_area(max_size = 10)
+dev.off()
+
+GO_HANP <- All_GO_Results[grep("HANP", All_GO_Results$dataset),]
+GO_HANP$dataset <- factor(GO_HANP$dataset, levels=c("HANP_broad_Data", "HANP_Macrophages_Data", "HANP_CD4TCells_Data", "HANP_CD8TCells_Data", "HANP_BCells_Data"))
+
+png(filename='Results/GO_HANP.png', height=1080, width=1080)
+ggplot(GO_HANP, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
+    geom_point(alpha=0.7) + 
+  geom_text_repel(size=4) + 
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  geom_jitter(width = 0.2, height = 0) +
+  labs(color=NULL, size="count DE genes", title="Ad-HA/NP") + 
+  ylab("-log(p-value)") + xlab(NULL) +
+  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  guides(color="none") + 
+  scale_size_area(max_size = 5)
+dev.off()
+
+GO_IL1b <- All_GO_Results[grep("IL1b", All_GO_Results$dataset),]
+GO_IL1b$dataset <- factor(GO_IL1b$dataset, levels=c("IL1b_broad_Data", "IL1b_Macrophages_Data", "IL1b_CD4TCells_Data", "IL1b_CD8TCells_Data", "IL1b_BCells_Data"))
+
+png(filename='Results/GO_IL1b.png', height=1080, width=1080)
+ggplot(GO_IL1b, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
+    geom_point(alpha=0.7) + 
+  geom_text_repel(size=4) + 
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  geom_jitter(width = 0.2, height = 0) +
+  labs(color=NULL, size="count DE genes", title="Ad-HA/NP+IL1b") + 
+  ylab("-log(p-value)") + xlab(NULL) +
+  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  guides(color="none") + 
+  scale_size_area(max_size = 10)
+dev.off()
+
+GO_IFI6 <- All_GO_Results[grep("IFI6", All_GO_Results$dataset),]
+GO_IFI6$dataset <- factor(GO_IFI6$dataset, levels=c("IFI6_broad_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_BCells_Data"))
+
+png(filename='Results/GO_IFI6.png', height=1080, width=1080)
+ggplot(GO_IFI6, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
+    geom_point(alpha=0.7) + 
+  geom_text_repel(size=4) + 
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  geom_jitter(width = 0.2, height = 0) +
+  labs(color=NULL, size="count DE genes") + 
+  ylab("-log(p-value)") + xlab(NULL) +
+  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  guides(color="none") + 
+  scale_size_area(max_size = 10)
+dev.off()
+
+```
+
+
+```{r testGO, eval=FALSE}
 # test GO
 geneList <- PH1N1_Macrophages_Data$adj.P.Val
 names(geneList) <- PH1N1_Macrophages_Data$ID
@@ -524,8 +599,20 @@ GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = result
 colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
 colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
 GO_Results$category <- category 
-#GO_Genes <- printGenes(object=GO_Data, whichTerms=GO_Results$Term, chip=annFUN.org, numChar=100)
 GO_Genes <- genesInTerm(GO_Data)
+GO_Genes <- GO_Genes[names(GO_Genes) %in% GO_Results$ID]
+GO_Genes <- GO_Genes[match(GO_Results$ID, names(GO_Genes)),]
+
+# obsolete function to show only significant genes
+n <- 0
+for(term in GO_Genes){
+  n <- n + 1
+  term <- term[term %in% sigGenes(GO_Data)]
+  if(length(term) == 0){
+    GO_Genes[n] <- "NA"
+  } else {
+  GO_Genes[n] <- term
+}}
 ```
 
 

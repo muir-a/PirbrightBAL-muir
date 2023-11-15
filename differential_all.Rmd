@@ -211,8 +211,8 @@ plot1 <- plotUMAP(sce_filt, point_size=0) +
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 ```
-and a FOXP3 UMAP
-```{r, eval=FALSE}
+investigate FOXP3 and Tregs
+```{r}
 library(viridis)
 #FOXP3 = "ENSSSCG00000012300"
 sce_FOXP3 <- sce_filt
@@ -238,7 +238,42 @@ plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_val
   scale_color_gradientn(colours = turbo(20), limits=c(0,0.01))
 dev.off()
 
-rm(sce_FOXP3)
+sce_FOXP3 <- sce_FOXP3[, assay(sce_FOXP3, "reconstructed")['ENSSSCG00000012300', ] > 0.002]
+
+png(filename='Results/UMAP_FOXP3_superthin.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, point_size=0) + 
+  aes(colour = sce_FOXP3$colour) + 
+  geom_point(shape='.', size=1, alpha=0.5) +
+  theme(text = element_text(size = 20))
+dev.off()
+
+## all CD4+ and FOXP3+ cells as proportion of total cells (to mimic flow)
+sce_filt$Flow_Treg[(sce_filt$cluster %in% c('10','7','18b','20a')) & (assay(sce_filt, "reconstructed")['ENSSSCG00000012300', ] > 0.002)] <- "YES"
+sce_filt$Flow_Treg[is.na(sce_filt$Flow_Treg)] <- "NO"
+
+CD4s <- sce_filt[,sce_filt$cluster %in% c('7', '10', '18b', '20a')]
+
+props <- prop.table(table(sce_filt$Flow_Treg, sce_filt$Sample), margin=2)['YES',]
+proptab <- annot[,c('sample', 'Condition', 'Sex')]
+proptab$proportions <- props[rownames(proptab)]
+proptab$Condition <- factor(proptab$Condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'))
+
+ggplot(data=proptab, aes(x=Condition, y=proportions)) +
+  geom_boxplot() +
+  geom_point(aes(col=Sex), position='jitter')
+
+## and print it
+
+pdf('Results/CD4+FOXP3+_prop_total.pdf', height=10, width=10)
+ggplot(data=proptab, aes(x=Condition, y=proportions)) +
+  geom_boxplot(na.rm=TRUE) +
+  geom_point(aes(col=Sex), position='jitter', size=4) +
+  labs(x=NULL) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
+dev.off()
+
+#rm(sce_FOXP3)
 
 ```
 
