@@ -248,7 +248,7 @@ plotUMAP(sce_FOXP3, point_size=0) +
 dev.off()
 
 ## all CD4+ and FOXP3+ cells as proportion of total cells (to mimic flow)
-sce_filt$Flow_Treg[(sce_filt$cluster %in% c('10','7','18b','20a')) & (assay(sce_filt, "reconstructed")['ENSSSCG00000012300', ] > 0.002)] <- "YES"
+sce_filt$Flow_Treg[(sce_filt$cluster %in% c('10','7','18b','20a')) & (assay(sce_filt, "reconstructed")['ENSSSCG00000012300', ] > 0.001)] <- "YES"
 sce_filt$Flow_Treg[is.na(sce_filt$Flow_Treg)] <- "NO"
 
 CD4s <- sce_filt[,sce_filt$cluster %in% c('7', '10', '18b', '20a')]
@@ -269,7 +269,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
   geom_point(aes(col=Sex), position='jitter', size=4) +
   labs(x=NULL) +
-  theme_classic() +
+  #theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 dev.off()
 
