@@ -92,6 +92,20 @@ mod_data <- function(df_re) {
   df_re$adj.P.Val[df_re$adj.P.Val <= y_limit] <- y_limit
   return(df_re)
 }
+mod_data2 <- function(df_re) {
+  names(df_re) <- c("ID", "logFC", "AveExpr", "adj.P.Val")
+  # add a column of NAs
+  df_re$diffexpressed <- "NO"
+  # if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+  df_re$diffexpressed[df_re$logFC > 0.3 & df_re$adj.P.Val < 0.05] <- "UP"
+  # if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+  df_re$diffexpressed[df_re$logFC < -0.3 & df_re$adj.P.Val < 0.05] <- "DOWN"
+  df_re$delabel <- NA
+  df_re$delabel[df_re$diffexpressed != "NO"] <- df_re$ID[df_re$diffexpressed != "NO"]
+  # Set p-value floor
+  df_re$adj.P.Val[df_re$adj.P.Val <= y_limit] <- y_limit
+  return(df_re)
+}
 #  Create volcano plot
 plot_volcano <- function(df_re, title) {
   ggplot(data=df_re, aes(x = logFC, y = -log10(adj.P.Val), col=diffexpressed, label=delabel)) + 
@@ -100,6 +114,16 @@ plot_volcano <- function(df_re, title) {
   labs(title=title) +
   xlim(-3, 3) + ylim(0, -log10(y_limit)) + 
   geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
+}
+plot_volcano2 <- function(df_re, title) {
+  ggplot(data=df_re, aes(x = logFC, y = -log10(adj.P.Val), col=diffexpressed, label=delabel)) + 
+  geom_point() + 
+  geom_text_repel(size=7) +
+  labs(title=title) +
+  xlim(-3, 3) + ylim(0, -log10(y_limit)) + 
+  geom_vline(xintercept=c(-0.3, 0.3), col="red") +
   geom_hline(yintercept=-log10(0.05), col="red") +
   scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"), guide="none")
 }
@@ -147,11 +171,11 @@ IFI6_broad_re <- run_NEBULA(SCE=IFI6_broad_SCE, predictors=c("named_cluster", "I
 y_limit <- 1.0e-100
 # plot IFI6
 IFI6_broad_Data <- data.frame(IFI6_broad_re$summary$gene, IFI6_broad_re$summary$logFC_IFI6_logcounts, IFI6_broad_re$summary$se_IFI6_logcounts, p.adjust(IFI6_broad_re$summary$p_IFI6_logcounts, "BH"))
-IFI6_broad_Data <- mod_data(IFI6_broad_Data)
+IFI6_broad_Data <- mod_data2(IFI6_broad_Data)
 IFI6_broad_genes <- IFI6_broad_Data$delabel[!is.na(IFI6_broad_Data$delabel)]
 
 png(filename='Results/NEBULA_broad_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_broad_Data, title="all cells, IFI6")
+plot_volcano2(df_re=IFI6_broad_Data, title="all cells, IFI6")
 dev.off()
 ```
 
@@ -364,10 +388,10 @@ IFI6_Macrophages_re <- run_NEBULA(SCE=IFI6_Macrophages_SCE, predictors=c("IFI6_l
 y_limit <- 1.0e-100
 IFI6_Macrophages_Data <- data.frame(IFI6_Macrophages_re$summary$gene, IFI6_Macrophages_re$summary$logFC_IFI6_logcounts, IFI6_Macrophages_re$summary$se_IFI6_logcounts, p.adjust(IFI6_Macrophages_re$summary$p_IFI6_logcounts, "BH"))
 
-IFI6_Macrophages_Data <- mod_data(IFI6_Macrophages_Data)
+IFI6_Macrophages_Data <- mod_data2(IFI6_Macrophages_Data)
 
 png(filename='Results/NEBULA_Macrophages_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_Macrophages_Data, title="Macrophages, IFI6")
+plot_volcano2(df_re=IFI6_Macrophages_Data, title="Macrophages, IFI6")
 dev.off()
 
 #CD8 T cells
@@ -377,10 +401,10 @@ IFI6_CD8TCells_re <- run_NEBULA(SCE=IFI6_CD8TCells_SCE, predictors=c("IFI6_logco
 
 IFI6_CD8TCells_Data <- data.frame(IFI6_CD8TCells_re$summary$gene, IFI6_CD8TCells_re$summary$logFC_IFI6_logcounts, IFI6_CD8TCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_CD8TCells_re$summary$p_IFI6_logcounts, "BH"))
 
-IFI6_CD8TCells_Data <- mod_data(IFI6_CD8TCells_Data)
+IFI6_CD8TCells_Data <- mod_data2(IFI6_CD8TCells_Data)
 
 png(filename='Results/NEBULA_CD8TCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_CD8TCells_Data, title="CD8TCells, IFI6")
+plot_volcano2(df_re=IFI6_CD8TCells_Data, title="CD8TCells, IFI6")
 dev.off()
 
 #CD4 T cells
@@ -390,10 +414,10 @@ IFI6_CD4TCells_re <- run_NEBULA(SCE=IFI6_CD4TCells_SCE, predictors=c("IFI6_logco
 
 IFI6_CD4TCells_Data <- data.frame(IFI6_CD4TCells_re$summary$gene, IFI6_CD4TCells_re$summary$logFC_IFI6_logcounts, IFI6_CD4TCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_CD4TCells_re$summary$p_IFI6_logcounts, "BH"))
 
-IFI6_CD4TCells_Data <- mod_data(IFI6_CD4TCells_Data)
+IFI6_CD4TCells_Data <- mod_data2(IFI6_CD4TCells_Data)
 
 png(filename='Results/NEBULA_CD4TCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_CD4TCells_Data, title="CD4TCells, IFI6")
+plot_volcano2(df_re=IFI6_CD4TCells_Data, title="CD4TCells, IFI6")
 dev.off()
 
 # B cells
@@ -404,10 +428,10 @@ IFI6_BCells_re <- run_NEBULA(SCE=IFI6_BCells_SCE, predictors=c("IFI6_logcounts")
 y_limit <- 1.0e-25
 IFI6_BCells_Data <- data.frame(IFI6_BCells_re$summary$gene, IFI6_BCells_re$summary$logFC_IFI6_logcounts, IFI6_BCells_re$summary$se_IFI6_logcounts, p.adjust(IFI6_BCells_re$summary$p_IFI6_logcounts, "BH"))
 
-IFI6_BCells_Data <- mod_data(IFI6_BCells_Data)
+IFI6_BCells_Data <- mod_data2(IFI6_BCells_Data)
 
 png(filename='Results/NEBULA_BCells_IFI6.png', height=1080, width=1080)
-plot_volcano(df_re=IFI6_BCells_Data, title="BCells, IFI6")
+plot_volcano2(df_re=IFI6_BCells_Data, title="BCells, IFI6")
 dev.off()
 
 ```
@@ -418,13 +442,16 @@ save(list=ls(), file='Data/NEBULA_IFI6_save.RData')
 
 venn diagrams of shared genes
 ```{r VennDiagrams}
+library(vctrs)
 library(venndir)
 set_colours <- c('#E31A1C', '#B2DF8A', '#33A02C', '#A6CEE3')
 theme_set(theme_minimal(base_size = 25))
 
 # make function to create sets from NEBULA Data
 Create_Set <- function(Data){
-  DE_subset <- Data[Data$diffexpressed != "NO",]
+  #DE_subset <- Data[Data$diffexpressed != "NO",]
+  DE_subset <- Data[Data$adj.P.Val < 0.01,]
+  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
   DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
   Set <- DE_subset$diffexpressed == "UP"
   Set[Set == TRUE] <- 1
@@ -435,26 +462,43 @@ Create_Set <- function(Data){
 
 png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
 PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
+PH1N1_Set <- list_drop_empty(PH1N1_Set)
 options("warn"=-1)
-venndir(PH1N1_Set, main="pH1N1", poly_alpha=0.5, proportional=FALSE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each",)
+venndir(PH1N1_Set, main="pH1N1", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(1,2), overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_HANP.png', height=1080, width=2160)
 HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
+HANP_Set <- list_drop_empty(HANP_Set)
 options("warn"=-1)
-venndir(HANP_Set, main="Ad-HA/NP", poly_alpha=0.5, proportional=FALSE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each",)
+venndir(HANP_Set, main="Ad-HA/NP", poly_alpha=0.5, proportional=TRUE, set_colors = c('#E31A1C', '#33A02C'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_IL1b.png', height=1080, width=2160)
 IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
+IL1b_Set <- list_drop_empty(IL1b_Set)
 options("warn"=-1)
-venndir(IL1b_Set, main="Ad-HA/NP Ad-IL1b", poly_alpha=0.5, proportional=FALSE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each",)
+venndir(IL1b_Set, main="Ad-HA/NP Ad-IL1b", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
 dev.off()
 
+Create_Set2 <- function(Data){
+  #DE_subset <- Data[Data$diffexpressed != "NO",]
+  DE_subset <- Data[Data$adj.P.Val < 0.05,]
+  DE_subset <- DE_subset[(DE_subset$logFC > 0.3) | (DE_subset$logFC < -0.3),]
+  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
+  DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
+  Set <- DE_subset$diffexpressed == "UP"
+  Set[Set == TRUE] <- 1
+  Set[Set == FALSE] <- -1
+  names(Set) <- DE_subset$ID
+  return(Set)
+}
+
 png(filename='Results/Venn_IFI6.png', height=1080, width=2160)
-IFI6_Set = list(Macrophages=Create_Set(IFI6_Macrophages_Data), B_Cells=Create_Set(IFI6_BCells_Data))
+IFI6_Set = list(Macrophages=Create_Set2(IFI6_Macrophages_Data), CD4_T_Cells=Create_Set2(IFI6_CD4TCells_Data), CD8_T_Cells=Create_Set2(IFI6_CD8TCells_Data), B_Cells=Create_Set2(IFI6_BCells_Data))
+IFI6_Set <- list_drop_empty(IFI6_Set)
 options("warn"=-1)
-venndir(IFI6_Set, poly_alpha=0.5, proportional=FALSE, set_colors = set_colours, label_preset="main items", show_items = c("item"), font_cex = c(2,2,1), item_cex = 2.5, overlap_type="each",)
+venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(2,2,1), item_cex = c(1.5,2), overlap_type="each")
 dev.off()
 
 ```
@@ -464,13 +508,15 @@ create functions and run topGO enrichment on differentially expressed genes
 library(topGO)
 library(org.Ss.eg.db)
 
-NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_broad_Data, IFI6_BCells_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data, IFI6_Macrophages_Data)
+five_colours <- c('#898888', '#E31A1C', '#6DE602', '#33A02C', '#00A7FF')
 
-ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_Macrophages_Data")
+NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_broad_Data, IFI6_BCells_Data, IFI6_Macrophages_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data)
+
+ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data")
 
 # GO iteration
 DiffGenes <- function(allScore){
-  return(allScore < 0.05)
+  return(allScore < 0.01)
   }
 n <- 0
 categories <- c("BP", "CC", "MF")
@@ -486,17 +532,16 @@ for (Data in NEBULA_Data) {
   resultKS <- runTest(GO_Data, algorithm = "classic", statistic = "ks")
   resultKS.elim <- runTest(GO_Data, algorithm = "elim", statistic = "ks")
   GO_Results <- GenTable(GO_Data, classicFisher = resultFisher, classicKS = resultKS, elimKS = resultKS.elim, orderBy = "classicFisher", ranksOf = "classicFisher", numChar=100, topNodes=20)
-  #colnames(GO_Results)[colnames(GO_Results) == "GO.ID"] <- "ID"
-  #colnames(GO_Results)[colnames(GO_Results) == "Term"] <- "term"
   GO_Results$category <- category 
   ID <- ID_List[n]
   GO_Results$dataset <- ID
   write.table(GO_Results, paste0('Results/GO_Results_', category, "_", ID, '.txt'), sep='\t', quote=FALSE, col.names=NA)
-  #if(n == 1)next
   All_GO_Results <- rbind(All_GO_Results, GO_Results)
 }
 
-# bubbleplot
+write.table(All_GO_Results, "Results/All_GO_Results.txt", sep="\t", quote=FALSE, col.names=NA)
+
+s# bubbleplot
 theme_set(theme_minimal(base_size = 25))
 
 GO_pH1N1 <- All_GO_Results[grep("PH1N1", All_GO_Results$dataset),]
@@ -511,13 +556,14 @@ ggplot(GO_pH1N1, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Signific
   labs(color=NULL, size="count DE genes", title="pH1N1") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  scale_color_manual(values=five_colours) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
 
 GO_HANP <- All_GO_Results[grep("HANP", All_GO_Results$dataset),]
 GO_HANP$dataset <- factor(GO_HANP$dataset, levels=c("HANP_broad_Data", "HANP_Macrophages_Data", "HANP_CD4TCells_Data", "HANP_CD8TCells_Data", "HANP_BCells_Data"))
-GO_HANP <- GO_HANP[GO_HANP$Significant > 4,]
+GO_HANP <- GO_HANP[GO_HANP$Significant > 2,]
 
 png(filename='Results/GO_HANP.png', height=1080, width=1080)
 ggplot(GO_HANP, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
@@ -527,6 +573,7 @@ ggplot(GO_HANP, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   labs(color=NULL, size="count DE genes", title="Ad-HA/NP") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  scale_color_manual(values=five_colours) +
   guides(color="none") + 
   scale_size_area(max_size = 5)
 dev.off()
@@ -543,13 +590,14 @@ ggplot(GO_IL1b, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   labs(color=NULL, size="count DE genes", title="Ad-HA/NP+IL1b") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  scale_color_manual(values=five_colours) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
 
 GO_IFI6 <- All_GO_Results[grep("IFI6", All_GO_Results$dataset),]
 GO_IFI6$dataset <- factor(GO_IFI6$dataset, levels=c("IFI6_broad_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_BCells_Data"))
-GO_IFI6 <- GO_IFI6[GO_IFI6$Significant > 4,]
+GO_IFI6 <- GO_IFI6[GO_IFI6$Significant > 19,]
 
 png(filename='Results/GO_IFI6.png', height=1080, width=1080)
 ggplot(GO_IFI6, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
@@ -559,6 +607,7 @@ ggplot(GO_IFI6, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  scale_color_manual(values=five_colours) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
