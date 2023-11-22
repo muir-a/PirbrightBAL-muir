@@ -17,7 +17,7 @@ This script performs a familiarity analysis between the clusters and cell types 
 
 This includes a mix of cell-type mapping, cluster mapping and cell to cell mapping. 
 
-**Note: This script is compute heavy so it is strongly recommended to run on a compute-cluster/workstation with more than 32 GB of memory and at least 16cores.**
+**Note: This script is compute heavy (due to multiple uses of mnnCorrect) so it is strongly recommended to run on a compute-cluster/workstation with more than 32 GB of memory and at least 16cores.**
 
 # Load packages and data
 pigBALsce is from 'differential all.Rmd'.
@@ -172,13 +172,13 @@ pigPBMCsce$EXP_celltype <- paste0('PBMC, ', pigPBMCsce$celltypes)
 PBMC_colour_list <- vector("list", length(pigPBMCsce$EXP_celltype))
 unique(pigPBMCsce$EXP_celltype)
 PBMC_colour_list[grep('Monocytes', pigPBMCsce$EXP_celltype)] <- '#FB9A99' #pink
-PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF00' #yellow
-PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#FFFF00' #yellow
+PBMC_colour_list[grep('cDCs', pigPBMCsce$EXP_celltype)] <- '#6A3D9A' #purple
+PBMC_colour_list[grep('pDCs', pigPBMCsce$EXP_celltype)] <- '#6A3D9A' #purple
 PBMC_colour_list[grep('ASC', pigPBMCsce$EXP_celltype)] <- '#1F78B4' #dark blue
 PBMC_colour_list[grep('B cells', pigPBMCsce$EXP_celltype)] <- '#A6CEE3' #pale blue
 PBMC_colour_list[grep('CD4+', pigPBMCsce$EXP_celltype)] <- '#B2DF8A' #light green
 PBMC_colour_list[grep('CD8', pigPBMCsce$EXP_celltype)] <- '#33A02C' # green
-PBMC_colour_list[grep('NK cells', pigPBMCsce$EXP_celltype)] <- '#6A3D9A' #purple
+PBMC_colour_list[grep('NK cells', pigPBMCsce$EXP_celltype)] <- '#FFFF00' #yellow
 PBMC_colour_list[grep('CD2', pigPBMCsce$EXP_celltype)] <- '#CAB2D6' #light purple
 PBMC_colour_list[sapply(PBMC_colour_list, is.null)] <- '#B15928' #brown
 pigPBMCsce$colour <- PBMC_colour_list
@@ -250,7 +250,7 @@ PBMC_gene_shortlist <- unique(PBMC_gene_shortlist)
 PBMC_gene_longlist <- unique(PBMC_gene_longlist)
 ```
 
-```{r visualise-new-sce-data}
+```{r visualise-new-sce-data, eval=FALSE}
 #Sanity check, visualise the converted data, attempt to recreate published visuals
 set.seed(123)
 pigPBMCsce <- fixedPCA(pigPBMCsce, subset.row=NULL)
@@ -325,8 +325,8 @@ Run mnnCorrect
 **Warning: this step is compute heavy.**
 ```{r run-mnnCorrect}
 mnnCorrected <- mnnCorrect(logcounts(BAL_Union_sce_run1), logcounts(BAL_Union_sce_run2), logcounts(BAL_Union_sce_run3), logcounts(BAL_Union_sce_run4), logcounts(BAL_Union_sce_run5), logcounts(BAL_Union_sce_run6), logcounts(PBMC_Union_sce_B), logcounts(PBMC_Union_sce_C), logcounts(PBMC_Union_sce_D), k=20, merge.order=list(list(1,2,3,4,5,6), list(7,8,9)))
-save(mnnCorrected, file='Data/mnnCorrected_feature50_k20.RData')
-#load('Data/mnnCorrected_feature50_k20.RData')
+save(mnnCorrected, file='Data/mnnCorrected_feature20_k20.RData')
+#load('Data/mnnCorrected_feature20_k20.RData')
 mnnCorrected
 ```
 
@@ -354,14 +354,14 @@ colData(mnnCorrected)
 legend_colours <- colour_labels
 names(legend_colours) <- mnnCorrected$EXP_celltype
 legend_colours <- legend_colours[!duplicated(names(legend_colours))]
-legend_colours <- legend_colours[c("BAL, Macrophages", "BAL, Monocytes", "PBMC, Monocytes", "BAL, cDCs", "PBMC, cDCs", "PBMC, pDCs", "BAL, Plasma Cells", "PBMC, ASC", "BAL, B Cells", "PBMC, B cells", "BAL, CD4 T Cells", "PBMC, CD4+ ab T cells", "BAL, Tregs", "BAL, Mitotic CD4 T Cells", "BAL, Mitotic CD8 T Cells", "BAL, CD8 T Cells", "PBMC, CD8ab+ ab T cells", "PBMC, CD8a+ ab T/NK cells", "BAL, NK cells", "PBMC, NK cells", "PBMC, CD2+ GD T cells", "PBMC, CD2- GD T cells", "BAL, T-cell-like", "BAL, Unknown", "PBMC, Unknown", "PBMC, Erythrocytes")]
+legend_colours <- legend_colours[c("BAL, Macrophages", "BAL, Monocytes", "PBMC, Monocytes", "BAL, cDCs", "PBMC, cDCs", "PBMC, pDCs", "BAL, Plasma Cells", "PBMC, ASC", "BAL, B Cells", "PBMC, B cells", "BAL, CD4 T Cells", "PBMC, CD4+ ab T cells", "BAL, Tregs", "BAL, Mitotic CD4 T Cells", "BAL, Mitotic CD8 T Cells", "BAL, CD8 T Cells", "PBMC, CD8ab+ ab T cells", "PBMC, CD8a+ ab T/NK cells", "PBMC, NK cells", "PBMC, CD2+ GD T cells", "PBMC, CD2- GD T cells", "BAL, T-cell-like", "BAL, Unknown", "PBMC, Unknown", "PBMC, Erythrocytes")]
 
 df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_colours))
 names(df_legend_colours) <- c("Cell_Type", "Colour")
 df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
 
 # T cell subset
-mnnCorrected_T_Cells <- mnnCorrected[, mnnCorrected$EXP_celltype %in% c("BAL, CD8 T Cells", "BAL, CD4 T Cells", "BAL, NK cells", "BAL, Tregs", "BAL, Mitotic CD8 T Cells", "BAL, Mitotic CD4 T Cells", "PBMC, CD4+ ab T cells", "PBMC, CD2- GD T cells", "PBMC, CD8a+ ab T/NK cells", "PBMC, CD2+ GD T cells", "PBMC, NK cells", "PBMC, CD8ab+ ab T cells")]
+mnnCorrected_T_Cells <- mnnCorrected[, mnnCorrected$EXP_celltype %in% c("BAL, CD8 T Cells", "BAL, CD4 T Cells", "BAL, Tregs", "BAL, Mitotic CD8 T Cells", "BAL, Mitotic CD4 T Cells", "PBMC, CD4+ ab T cells", "PBMC, CD2- GD T cells", "PBMC, CD8a+ ab T/NK cells", "PBMC, CD2+ GD T cells", "PBMC, CD8ab+ ab T cells")]
 
 #Calculate UMAPs from PCA
 set.seed(123)
@@ -377,7 +377,7 @@ png(filename='Results/Combined_mnnCorrectedUMAP.png', height=2160, width=4320)
 plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
   geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
   labs(x=NULL, y=NULL, color="A") +
-  scale_color_manual(values = legend_colours) +
+  scale_color_manual(values = legend_colours, breaks=names(legend_colours)) +
   guides(colour = guide_legend(ncol = 1)) + 
   theme(legend.position=c(-0.35,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 40),
         axis.text.x=element_blank(), axis.ticks.x=element_blank(),
@@ -385,16 +385,16 @@ plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
 plot1 <- plotUMAP(mnnCorrected, point_size=0) +
   aes(colour = mnnCorrected$colour) +
   geom_point(shape='.', size=0.3) +
-  geom_text(x=-12, y=16, size=30, label="A", color="black") +
+  geom_text(x=-12, y=10, size=30, label="A", color="black") +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-35), "cm"), text = element_text(size = 40))
 plot2 <- plotUMAP(mnnCorrected, colour_by="batch", point_size=0.3) +
   theme(legend.position=c(0.8,0.8), legend.direction="vertical") +
-  geom_text(x=-12, y=16, size=30, label="B") +
-  guides(colour = guide_legend(override.aes = list(size=10), title=NULL))+ theme(text = element_text(size = 40)) +
+  geom_text(x=-12, y=10, size=30, label="B") +
+  guides(colour = guide_legend(override.aes = list(size=10), title="B"))+ theme(text = element_text(size = 40)) +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-35), "cm"))
 plot3 <- plotUMAP(mnnCorrected_T_Cells, colour_by="EXP_celltype", point_size=0.3) +
   theme(legend.position=c(0.5,1.2), legend.direction="vertical") +
-  geom_text(x=-8.5, y=10, size=30, label="C") +
+  geom_text(x=-12, y=11, size=30, label="C") +
   guides(colour = guide_legend(override.aes = list(size=10), title="C", ncol=1))+ theme(text = element_text(size = 40)) +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,-110), "cm"))
 grid.arrange(plot1, plot0, plot2, plot3, ncol=2)
@@ -525,7 +525,7 @@ grouplist[grep('Mitotic CD8', nodes$name)] <- 'k'
 grouplist[grep('Monocytes', nodes$name)] <- 'g'
 grouplist[grep('Macrophages', nodes$name)] <- 'h'
 grouplist[grep('DCs', nodes$name)] <- 'i'
-grouplist[grep('pDCs', nodes$name)] <- 'a'
+grouplist[grep('pDCs', nodes$name)] <- 'i'
 grouplist[grep('CD2', nodes$name)] <- 'd'
 grouplist[sapply(grouplist, is.null)] <- 'l'
 
@@ -547,14 +547,14 @@ grouplist2[grep('Mitotic CD8', links$source)] <- 'k'
 grouplist2[grep('Monocytes', links$source)] <- 'g'
 grouplist2[grep('Macrophages', links$source)] <- 'h'
 grouplist2[grep('DCs', links$source)] <- 'i'
-grouplist2[grep('pDCs', links$source)] <- 'a'
+grouplist2[grep('pDCs', links$source)] <- 'i'
 grouplist2[grep('CD2', links$source)] <- 'd'
 grouplist2[sapply(grouplist2, is.null)] <- 'l'
 
 links$group <- grouplist2
 
 # Give each group a colour
-my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#6A3D9A", "#FB9A99", "#E31A1C", "#FFFF00", "#FDBF6F", "#FF7F00", "#B15928"])'
+my_color <- 'd3.scaleOrdinal(d3.schemeCategory10) .domain(["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"]) .range(["#1F78B4", "#A6CEE3", "#B2DF8A", "#CAB2D6", "#33A02C", "#FFFF00", "#FB9A99", "#E31A1C", "#6A3D9A",  "#FDBF6F", "#FF7F00", "#B15928"])'
 
 # convert names to IDs
 links$IDsource <- match(links$source, nodes$name)-1 
@@ -583,7 +583,7 @@ Make heatmaps of interesting subsets
 library(gplots)
 library(viridis)
 
-# Everything
+# Everything heatmap
 BAL_heat_all <- corrected_BAL[rownames(corrected_BAL) %in% PBMC_gene_shortlist, ]
 PBMC_heat_all <- corrected_PBMC[rownames(corrected_PBMC) %in% PBMC_gene_shortlist, ]
 identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
@@ -591,7 +591,24 @@ identical(rownames(PBMC_heat_all), rownames(BAL_heat_all))
 BAL_heat_all <- as.matrix(logcounts(aggregateAcrossCells(BAL_heat_all, ids=BAL_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 PBMC_heat_all <- as.matrix(logcounts(aggregateAcrossCells(PBMC_heat_all, ids=PBMC_heat_all$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 heat_all_Matrix <- cbind(BAL_heat_all, PBMC_heat_all)
-write.csv(heat_all_Matrix, file='Results/scmap_heatmap_raw_values.csv')
+write.csv(heat_all_Matrix, file='Results/heatmap_scmap_all_raw_values.csv')
+
+#Identify universal top and bottom genes to set scales
+gene_scale <- apply(heat_all_Matrix, 1, mean)
+names(gene_scale) <- rownames(heat_all_Matrix)
+gene_scale <- sort(gene_scale)
+head(gene_scale, n=5)
+tail(gene_scale, n=5)
+
+gene_scale <- apply(heat_all_Matrix, 1, sum)
+names(gene_scale) <- rownames(heat_all_Matrix)
+gene_scale <- sort(gene_scale)
+head(gene_scale, n=5)
+tail(gene_scale, n=5)
+
+# i.e. most range between 0 and 0.2, some outliers reaching for 0.3
+#breaks = seq(0,max(heat_all_Matrix),length.out=257)
+breaks = seq(0,0.2,length.out=257)
 
 xAxis <- colnames(heat_all_Matrix)
 xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "blue", "orange")
@@ -600,8 +617,8 @@ colour_df <- colour_df[match(xAxis, colour_df$verbose_cluster),]
 identical(colour_df$verbose_cluster, xAxis)
 Col_Colours <- as.character(colour_df$colour)
 
-png(filename='Results/scmap_all_Heatmap.png', height=3840, width=7680)
-heatmap.2(heat_all_Matrix, margins=c(30,50), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
+png(filename='Results/heatmap_scmap_all.png', height=2160, width=3840)
+heatmap.2(heat_all_Matrix, margins=c(30,50), scale="row", col = bluered(100), cexRow=2, cexCol=2, colCol=xColours,  trace="none", key=TRUE, key.xlab="row Z-score", lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
 dev.off()
 
 # B cells
@@ -617,29 +634,29 @@ BAL_B_cells <- as.matrix(logcounts(aggregateAcrossCells(BAL_B_cells, ids=BAL_B_c
 PBMC_B_cells <- as.matrix(logcounts(aggregateAcrossCells(PBMC_B_cells, ids=PBMC_B_cells$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 B_Cells_Matrix <- cbind(BAL_B_cells, PBMC_B_cells)
 
-png(filename='Results/B_Cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+png(filename='Results/heatmap_B_Cells_Cross.png', height=2160, width=1080)
+heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
 dev.off()
 
-png(filename='Results/Cross_Heatmap_with_scale.png', height=2160, width=2160)
-heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(15,15), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(1,9), key=TRUE, keysize=2, density.info='none', key.xlab="mean logcounts")
+png(filename='Results/heatmap_B_cells_with_scale.png', height=2160, width=1080)
+heatmap.2(B_Cells_Matrix, Colv=FALSE, margins=c(15,15), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(1,9), key=TRUE, keysize=2, density.info='none', key.xlab="mean logcounts")
 dev.off()
 
-# CD8 and NK
-CD8NK_genes <- c("CD28", "CD5", "CD3D", "CD3E", "CD4", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "PLVAP", "PRF1", "GPR37", "ENSSSCG00000026217", "ZNF683", "ENSSSCG00000008898", "CD5", "EVL", "CD247", "RHEX", "TRAT1", "NKG7", "GZMB", "CD2", "ENSSSCG00000009327", "SAT1", "LAT", "SH2D1A", "DAPL1")
+# Plasma cells
+plasma_genes <- c("PRDM1", "IRF4", "JCHAIN", "TNFRSF17", "TNFRSF13B", "MANF", "ATOX1", "SEC11C", "SSR3", "TXNDC5", "CRELD2", "MZBD1", "ENSSSCG00000038719", "HLA-DRA", "SLA-DQB1", "CD74", "SLA-DMB", "CTSZ", "SNX3", "CD79B", "ENSSSCG00000040849", "SMC6")
 
-BAL_CD8NK <- corrected_BAL[rownames(corrected_BAL) %in% CD8NK_genes, ]
-BAL_CD8NK <- BAL_CD8NK[, BAL_CD8NK$cluster %in% c("9a", "9b", "9c", "21")]
-PBMC_CD8NK <- corrected_PBMC[rownames(corrected_PBMC) %in% CD8NK_genes, ]
-PBMC_CD8NK <- PBMC_CD8NK[, PBMC_CD8NK$seurat_clusters %in% c("1", "17", "21")]
-identical(rownames(PBMC_CD8NK), rownames(BAL_CD8NK))
+BAL_plasma <- corrected_BAL[rownames(corrected_BAL) %in% plasma_genes, ]
+BAL_plasma <- BAL_plasma[, BAL_plasma$cluster %in% c("2", "3")]
+PBMC_plasma <- corrected_PBMC[rownames(corrected_PBMC) %in% plasma_genes, ]
+PBMC_plasma <- PBMC_plasma[, PBMC_plasma$seurat_clusters %in% c("29", "32")]
+identical(rownames(PBMC_plasma), rownames(BAL_plasma))
 
-BAL_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(BAL_CD8NK, ids=BAL_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-PBMC_CD8NK <- as.matrix(logcounts(aggregateAcrossCells(PBMC_CD8NK, ids=PBMC_CD8NK$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
-CD8NK_Matrix <- cbind(BAL_CD8NK, PBMC_CD8NK)
+BAL_plasma <- as.matrix(logcounts(aggregateAcrossCells(BAL_plasma, ids=BAL_plasma$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_plasma <- as.matrix(logcounts(aggregateAcrossCells(PBMC_plasma, ids=PBMC_plasma$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+plasma_Matrix <- cbind(BAL_plasma, PBMC_plasma)
 
-png(filename='Results/CD8NK_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(CD8NK_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+png(filename='Results/heatmap_plasma_Cross.png', height=2160, width=1080)
+heatmap.2(plasma_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
 dev.off()
 
 # Mitotic T cells
@@ -655,8 +672,8 @@ BAL_mitotic <- as.matrix(logcounts(aggregateAcrossCells(BAL_mitotic, ids=BAL_mit
 PBMC_mitotic <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mitotic, ids=PBMC_mitotic$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 mitotic_matrix <- cbind(BAL_mitotic, PBMC_mitotic)
 
-png(filename='Results/mitotic_T_cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(mitotic_matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+png(filename='Results/heatmap_mitotic_T_cells_Cross.png', height=2160, width=1080)
+heatmap.2(mitotic_matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
 dev.off()
 
 # Conventional T cells
@@ -672,8 +689,100 @@ BAL_T_cell <- as.matrix(logcounts(aggregateAcrossCells(BAL_T_cell, ids=BAL_T_cel
 PBMC_T_cell <- as.matrix(logcounts(aggregateAcrossCells(PBMC_T_cell, ids=PBMC_T_cell$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
 T_Cell_Matrix <- cbind(BAL_T_cell, PBMC_T_cell)
 
-png(filename='Results/conventional_T_cells_Cross_Heatmap.png', height=2160, width=2160)
-heatmap.2(T_Cell_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", col=viridis(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+png(filename='Results/heatmap_conventional_T_cells_Cross.png', height=2160, width=1080)
+heatmap.2(T_Cell_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+dev.off()
+
+# Monocytic cells
+mono_genes <- c("CD163", "FLT3", "CD14", "CD4", "CADM1", "CSF1R", "FCGR1A", "BCL6", "CCL17", "IRF8", "ADAM8", "ANXA5", "CEBPB", "CAPG", "S100A8", "YBX3", "PCNA", "SMC4", "PCLAF", "VIM", "SRGN", "CD63", "TYROBP", "ANXA1", "CTSS", "LYZ", "FOLR1", "IFI6", "CST3")
+
+BAL_mono <- corrected_BAL[rownames(corrected_BAL) %in% mono_genes, ]
+BAL_mono <- BAL_mono[, BAL_mono$cluster %in% c("1", "4", "8", "13", "15")]
+PBMC_mono <- corrected_PBMC[rownames(corrected_PBMC) %in% mono_genes, ]
+PBMC_mono <- PBMC_mono[, PBMC_mono$seurat_clusters %in% c("20", "27", "30", "32")]
+identical(rownames(PBMC_mono), rownames(BAL_mono))
+
+BAL_mono <- as.matrix(logcounts(aggregateAcrossCells(BAL_mono, ids=BAL_mono$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_mono <- as.matrix(logcounts(aggregateAcrossCells(PBMC_mono, ids=PBMC_mono$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+mono_Matrix <- cbind(BAL_mono, PBMC_mono)
+
+png(filename='Results/heatmap_monocytic_Cross.png', height=2160, width=1080)
+heatmap.2(mono_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+dev.off()
+
+# Cluster 20 T cells
+BAL_C20 <- corrected_BAL[rownames(corrected_BAL) %in% T_cell_genes, ]
+BAL_C20 <- BAL_C20[, BAL_C20$cluster %in% c("20a", "20b")]
+PBMC_C20 <- corrected_PBMC[rownames(corrected_PBMC) %in% T_cell_genes, ]
+PBMC_C20 <- PBMC_C20[, PBMC_C20$seurat_clusters %in% c("0", "3", "28")]
+identical(rownames(PBMC_C20), rownames(BAL_C20))
+
+BAL_C20 <- as.matrix(logcounts(aggregateAcrossCells(BAL_C20, ids=BAL_C20$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+PBMC_C20 <- as.matrix(logcounts(aggregateAcrossCells(PBMC_C20, ids=PBMC_C20$verbose_cluster, statistics='mean', use.assay.type='logcounts')))
+C20_Matrix <- cbind(BAL_C20, PBMC_C20)
+
+png(filename='Results/heatmap_cluster20_T_cells_Cross.png', height=2160, width=1080)
+heatmap.2(C20_Matrix, margins=c(50,40), scale="none", trace="none", dendrogram="row", breaks=breaks, col=turbo(256), lhei=c(0.1,10), lwid=c(1,10), cexRow=4, cexCol=4, key=FALSE)
+dev.off()
+
+```
+# Gene expression bubbleplots (dotplots)
+```{r bubbleplots, eval=FALSE}
+library(gridExtra)
+theme_set(theme_minimal(base_size = 14))
+# B cells
+BAL_B_cells <- corrected_BAL[rownames(corrected_BAL) %in% B_Cell_genes, ]
+BAL_B_cells <- BAL_B_cells[, BAL_B_cells$cluster %in% c("12", "16")]
+PBMC_B_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% B_Cell_genes, ]
+PBMC_B_cells <- PBMC_B_cells[, PBMC_B_cells$seurat_clusters %in% c("8", "16")]
+rowData(BAL_B_cells)$scmap_features <- NULL
+rowData(PBMC_B_cells)$scmap_features <- NULL
+colData(BAL_B_cells)$cluster <- NULL
+colData(PBMC_B_cells)$seurat_clusters <- NULL
+Combined_B_Cells <- cbind(BAL_B_cells, PBMC_B_cells)
+
+p1 <- plotDots(Combined_B_Cells, features=rownames(Combined_B_Cells), group="verbose_cluster") +
+  theme(aspect.ratio = 4, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank())
+
+# T cells 
+
+BAL_T_cells <- corrected_BAL[rownames(corrected_BAL) %in% T_cell_genes, ]
+BAL_T_cells <- BAL_T_cells[, BAL_T_cells$cluster %in% c("6", "7", "10")]
+PBMC_T_cells <- corrected_PBMC[rownames(corrected_PBMC) %in% T_cell_genes, ]
+PBMC_T_cells <- PBMC_T_cells[, PBMC_T_cells$seurat_clusters %in% c("4", "21", "28")]
+rowData(BAL_T_cells)$scmap_features <- NULL
+rowData(PBMC_T_cells)$scmap_features <- NULL
+colData(BAL_T_cells)$cluster <- NULL
+colData(PBMC_T_cells)$seurat_clusters <- NULL
+Combined_T_Cells <- cbind(BAL_T_cells, PBMC_T_cells)
+
+p2 <- plotDots(Combined_T_Cells, features=rownames(Combined_T_Cells), group="verbose_cluster") + 
+  theme(aspect.ratio = 4, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank())
+
+png(filename='Results/Bubbleplot_T_and_B.png', height=2160, width=540)
+grid.arrange(p1, p2, ncol=1)
+dev.off()
+
+## Everything bubbleplot
+#reorder axis's using heatmap dendrogram
+pp <- heatmap.2(heat_all_Matrix, scale="row")
+rowIndex <- pp$rowInd
+colIndex <- pp$colInd
+
+sce1 <- corrected_BAL
+sce2 <- corrected_PBMC
+rowData(sce1)$scmap_features <- NULL
+rowData(sce2)$scmap_features <- NULL
+colData(sce1)$cluster <- NULL
+colData(sce2)$seurat_clusters <- NULL
+Combined_sce <- cbind(sce1, sce2)
+
+png(filename='Results/bubbleplot_scmap_all.png', height=3840, width=3840)
+plotDots(Combined_sce, features=rownames(heat_all_Matrix), group="verbose_cluster", color=turbo(256)) +
+  theme_minimal(base_size = 50) +
+  theme(aspect.ratio = 1, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank(), legend.key.size = unit(2, 'cm'), axis.text.y=element_text(size=10)) +
+  scale_y_discrete(limits=rownames(heat_all_Matrix)[rowIndex]) +
+  scale_x_discrete(limits=colnames(heat_all_Matrix)[colIndex])
 dev.off()
 
 ```
