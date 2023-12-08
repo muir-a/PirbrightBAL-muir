@@ -27,6 +27,8 @@ library(biomaRt)
 library(scds)
 library(batchelor)
 library(bluster)
+library(gridExtra)
+library(edgeR)
 
 load('ongoing_full_clustered.RData')
 
@@ -140,7 +142,7 @@ sce_all_filt$EXP_celltype <- paste0('BAL, ', sce_all_filt$named_cluster)
 BAL_colour_list <- vector("list", length(sce_all_filt$EXP_celltype))
 BAL_colour_list[grep('Macrophages', sce_all_filt$EXP_celltype)] <- '#E31A1C' #red
 BAL_colour_list[grep('Monocytes', sce_all_filt$EXP_celltype)] <- '#FB9A99' #pink
-BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#FFFF00' #yellow
+BAL_colour_list[grep('cDCs', sce_all_filt$EXP_celltype)] <- '#6A3D9A' #purple
 BAL_colour_list[grep('Plasma Cells', sce_all_filt$EXP_celltype)] <- '#1F78B4' #dark blue
 BAL_colour_list[grep('B Cells', sce_all_filt$EXP_celltype)] <- '#A6CEE3' #pale blue
 BAL_colour_list[grep('Tregs', sce_all_filt$EXP_celltype)] <- '#CAB2D6' #light purple
@@ -148,7 +150,7 @@ BAL_colour_list[grep('CD4', sce_all_filt$EXP_celltype)] <- '#B2DF8A' #light gree
 BAL_colour_list[grep('Mitotic CD4 T Cells', sce_all_filt$EXP_celltype)] <- '#FDBF6F' #pale orange
 BAL_colour_list[grep('CD8', sce_all_filt$EXP_celltype)] <- '#33A02C' # green
 BAL_colour_list[grep('Mitotic CD8 T Cells', sce_all_filt$EXP_celltype)] <- '#FF7F00' #orange
-BAL_colour_list[grep('NK', sce_all_filt$EXP_celltype)] <- '#6A3D9A' #purple
+BAL_colour_list[grep('NK', sce_all_filt$EXP_celltype)] <- '#FFFF00' #yellow
 BAL_colour_list[sapply(BAL_colour_list, is.null)] <- '#B15928' #brown
 sce_all_filt$colour  <- BAL_colour_list
 
@@ -157,9 +159,7 @@ colData(sce_filt)[,c('named_cluster', 'long_named_cluster', 'main_clusters', 've
 ```
 
 And make some UMAPs.
-
 ```{r}
-
 legend_colours <- BAL_colour_list
 names(legend_colours) <- sce_all_filt$long_named_cluster
 legend_colours <- legend_colours[!duplicated(names(legend_colours))]
@@ -169,8 +169,6 @@ df_legend_colours <- data.frame(unlist(names(legend_colours)), unlist(legend_col
 names(df_legend_colours) <- c("Cell_Type", "Colour")
 df_legend_colours$Cell_Type <- factor(df_legend_colours$Cell_Type, levels=c(df_legend_colours$Cell_Type))
 df_legend_colours$dummy_data <- seq(1, length(df_legend_colours[,1]))
-
-library(gridExtra)
 
 # Plot new named clusters
 png('Results/UMAP_named_clusters.png', height=1080, width=2160)
@@ -191,12 +189,161 @@ plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
 plot1 <- plotUMAP(sce_filt, point_size=0, text_by="main_clusters", text_size=14) +
   aes(colour = sce_filt$colour) +
   geom_point(shape='.', size=1, alpha=0.5) +
-  geom_text(x=-10, y=8, size=30, label="C", color="black") +
+  geom_text(x=-10, y=14, size=30, label="C", color="black") +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 
+png(filename='Results/UMAP_named_and_unnumbered_clusters.png', height=1080, width=2160)
+plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color=NULL) +
+  scale_color_manual(values = legend_colours) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotUMAP(sce_filt, point_size=0) +
+  aes(colour = sce_filt$colour) +
+  geom_point(shape='.', size=1, alpha=0.5) +
+  geom_text(x=-10, y=14, size=30, label="C", color="black") +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
+grid.arrange(plot1, plot0, ncol=2)
+dev.off()
 ```
+investigate FOXP3 and Tregs
+```{r}
+library(viridis)
+#FOXP3 = "ENSSSCG00000012300"
+sce_FOXP3 <- sce_filt
+
+names(rowData(sce_FOXP3))[which(names(rowData(sce_FOXP3))=="start")]="gene_start"
+names(rowData(sce_FOXP3))[which(names(rowData(sce_FOXP3))=="end")]="gene_end"
+range(as.vector(logcounts(sce_FOXP3['ENSSSCG00000012300' ,])))
+range(as.vector(assay(sce_FOXP3['ENSSSCG00000012300' ,], "reconstructed")))
+
+png(filename='Results/UMAP_FOXP3.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.02))
+dev.off()
+
+# delete cells that show no FOXP3 expression
+
+sce_FOXP3 <- sce_FOXP3[, assay(sce_FOXP3, "reconstructed")['ENSSSCG00000012300', ] > 0.001]
+
+png(filename='Results/UMAP_FOXP3_thin.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = turbo(20), limits=c(0,0.01))
+dev.off()
+
+sce_FOXP3 <- sce_FOXP3[, assay(sce_FOXP3, "reconstructed")['ENSSSCG00000012300', ] > 0.002]
+
+png(filename='Results/UMAP_FOXP3_superthin.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, point_size=0) + 
+  aes(colour = sce_FOXP3$colour) + 
+  geom_point(shape='.', size=1, alpha=0.5) +
+  theme(text = element_text(size = 20))
+dev.off()
+
+## all CD4+ and FOXP3+ cells as proportion of total cells (to mimic flow)
+sce_filt$Flow_Treg[(sce_filt$cluster %in% c('10','7','18b','20a')) & (assay(sce_filt, "reconstructed")['ENSSSCG00000012300', ] > 0.001)] <- "YES"
+sce_filt$Flow_Treg[is.na(sce_filt$Flow_Treg)] <- "NO"
+
+CD4s <- sce_filt[,sce_filt$cluster %in% c('7', '10', '18b', '20a')]
+
+props <- prop.table(table(sce_filt$Flow_Treg, sce_filt$Sample), margin=2)['YES',]
+proptab <- annot[,c('sample', 'Condition', 'Sex')]
+proptab$proportions <- props[rownames(proptab)]
+proptab$Condition <- factor(proptab$Condition, levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'))
+
+ggplot(data=proptab, aes(x=Condition, y=proportions)) +
+  geom_boxplot() +
+  geom_point(aes(col=Sex), position='jitter')
+
+## and print it
+
+pdf('Results/CD4+FOXP3+_prop_total.pdf', height=10, width=10)
+ggplot(data=proptab, aes(x=Condition, y=proportions)) +
+  geom_boxplot(na.rm=TRUE) +
+  geom_point(aes(col=Sex), position='jitter', size=4) +
+  labs(x=NULL) +
+  #theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
+dev.off()
+
+#rm(sce_FOXP3)
+
+```
+
+And a TSNE for supplementary
+```{r}
+png(filename='Results/TSNE_named_and_unnumbered_clusters.png', height=1080, width=2160)
+plot0 <- ggplot(data=df_legend_colours, aes(x=dummy_data)) +
+  geom_point(aes(y=dummy_data, color=Cell_Type), size=10) +
+  labs(x=NULL, y=NULL, color=NULL) +
+  scale_color_manual(values = legend_colours) +
+  guides(colour = guide_legend(ncol = 1)) + 
+  theme(legend.position=c(0.5,0), legend.direction="vertical", aspect.ratio=0, text = element_text(size = 50),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(), axis.ticks.y=element_blank())
+plot1 <- plotTSNE(sce_filt, point_size=0) +
+  aes(colour = sce_filt$colour) +
+  geom_point(size=1, alpha=1) +
+  theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
+grid.arrange(plot1, plot0, ncol=2)
+dev.off()
+```
+
+
+And a heatmap of all defining gene markers for our cell types
+```{r}
+library(gplots)
+library(viridis)
+
+defining_genes <- c("CD163", "FLT3", "CD14", "CD4", "CADM1", "CSF1R", "FCGR1A", "BCL6", "CCL17", "IRF8", "ADAM8", "PRDM1", "IRF4", "JCHAIN" , "TNFRSF17", "TNFRSF13B", "CD19", "PAX5", "EBF1", "MS4A1", "CD79B", "IRF8", "CD28", "CD5", "CD3D", "CD3E", "CD8A", "CD8B", "FOXP3", "E2F1", "E2F2", "KLRK1", "KLRB1", "KIT", "NCR1", "TBX21", "EOMES", "GATA3", "IL1RL1", "IL7R", "ID3", "ACTG1", "GPR37", "NAPSA", "SFTPA1", "RPS3A", "RPS26", "RPS11", "RPL37")
+
+defining_sce <- sce_all_filt
+rownames(defining_sce) <- rowData(sce_all_filt)$Symbol
+# Remove forbidden rowData names (for generation of CompressedGRangesList)
+names(rowData(defining_sce))[which(names(rowData(defining_sce))=="start")]="gene_start"
+names(rowData(defining_sce))[which(names(rowData(defining_sce))=="end")]="gene_end"
+#subset to defining genes and calculate mean logcounts
+defining_sce <- defining_sce[rownames(defining_sce) %in% defining_genes, ]
+defining_matrix <- as.matrix(logcounts(aggregateAcrossCells(defining_sce, ids=defining_sce$long_named_cluster, statistics='mean', use.assay.type='logcounts')))
+
+xAxis <- colnames(defining_matrix)
+#xColours <- ifelse(grepl("BAL", xAxis, fixed=TRUE), "blue", "orange")
+colour_df <- unique(as.data.frame(colData(defining_sce))[, c("long_named_cluster", "colour")])
+colour_df <- colour_df[match(xAxis, colour_df$long_named_cluster),]
+identical(colour_df$long_named_cluster, xAxis)
+Col_Colours <- as.character(colour_df$colour)
+
+png(filename='Results/heatmap_defining_genes.png', height=2160, width=1080)
+heatmap.2(defining_matrix, margins=c(40,20), scale="row", col = bluered(100), cexRow=4, cexCol=4,  trace="none", key=FALSE, key.xlab="row Z-score", lhei=c(1,20), lwid=c(1,8), ColSideColors=c(Col_Colours))
+dev.off()
+
+png(filename='Results/heatmap_defining_genes_scale.png', height=1080, width=1080)
+heatmap.2(defining_matrix, scale="row", col = bluered(100), cexRow=4, cexCol=4,  trace="none", key=TRUE, keysize=2, key.title="", key.xlab="row Z-score", lhei=c(1,9), lwid=c(1,2), ColSideColors=c(Col_Colours))
+dev.off()
+```
+And a bubbleplot of defining genes
+```{r}
+#reorder axis's using heatmap dendrogram
+pp <- heatmap.2(defining_matrix, scale="row")
+rowIndex <- pp$rowInd
+colIndex <- pp$colInd
+
+png(filename='Results/bubbleplot_defining_genes.png', height=3840, width=3840)
+plotDots(defining_sce, features=rownames(defining_sce), group="long_named_cluster", color=turbo(256)) +
+  theme_minimal(base_size = 50) +
+  theme(aspect.ratio = 6, axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), axis.title.x=element_blank(), axis.title.y=element_blank(), legend.key.size = unit(2, 'cm')) +
+  scale_y_discrete(limits=rownames(defining_matrix)[rowIndex]) +
+  scale_x_discrete(limits=colnames(defining_matrix)[colIndex])
+dev.off()
+```
+
 
 Based on the sorting strategy used, we did not intend to capture CD16+ cells (incl NK cells and NK-cell-like T cells) or epithelial cells. For this reason, we are reluctant to run differential analyses on clusters 9 (NK and NK-like CD8+ Ts) and cluster 19 (epithelial cells) as these are likely a biased set of cells within these phenotypes that snuck through the sorts. We will therefore exclude these clusters as well.
 
@@ -226,7 +373,7 @@ plot0 <- ggplot(data=df_legend_colours2, aes(x=dummy_data)) +
 plot1 <- plotUMAP(sce_filt, point_size=0, text_by="main_clusters", text_size=14) +
   aes(colour = sce_filt$colour) +
   geom_point(shape='.', size=1, alpha=0.5) +
-  geom_text(x=-10, y=8, size=30, label="C", color="black") +
+  geom_text(x=-10, y=15, size=30, label="C", color="black") +
   theme(aspect.ratio = 1, plot.margin = unit(c(0,0,0,0), "cm"), text = element_text(size = 40))
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
@@ -272,7 +419,6 @@ Our DA analysis will be run using a negative binomial test. Because clusters wer
 We'll consider a change in abundance with any treatment versus PBS in an ANOVA-like analysis (strictly speaking, I believe this is analysis-of-deviance-like).
 
 ```{r}
-library(edgeR)
 
 DA <- lapply(subsets, function(x){
   abundances <- table(x$cluster, x$Sample)
@@ -316,7 +462,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
 pdf('Results/Treg_prop_total.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
-  geom_point(aes(col=Sex), position='jitter') +
+  geom_point(aes(col=Sex), position='jitter', size=4) +
   labs(x=NULL) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
@@ -338,7 +484,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
 pdf('Results/Treg_prop_CD4.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
-  geom_point(aes(col=Sex), position='jitter') +
+  geom_point(aes(col=Sex), position='jitter', size=6) +
   labs(x=NULL) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
@@ -550,7 +696,7 @@ plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_
   ggplot(data=tab, aes(x=split, y=res)) +
     geom_boxplot(na.rm=TRUE) +
     geom_point(aes(col=col), position='jitter') +
-    labs(y="expression", col=col_by, title=main) +
+    labs(x=NULL, y="expression", col=col_by, title=main) +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 }
@@ -563,11 +709,20 @@ plot_resid_gg(y, clust='6', regress_out='run', split_by='condition', split_by_le
 
 ## this is interesting as it has highlighted why we had such different values when including run instead of sex in the model - it looks like one of the pH1N1 samples that was in its own run (other sample was excluded) ended up getting flattened.
 
+for (cluster in unique(y$samples$cluster)){
+  plot <- plot_resid_gg(y, clust=cluster, regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main=cluster)
+  print(plot)
+}
+# IFI6 appears to be universally up-regulated in infected pigs, though clusters 16 and 21 also show upregulation in IL1b vaccinated pigs. 
+
 pdf('Results/IFI6_pH1N1_egs.pdf', height=10, width=20)
-p1 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 6')
-p2 <- plot_resid_gg(y, clust='2', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 2')
-p3 <- plot_resid_gg(y, clust='1', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cluster 1')
-grid.arrange(p1, p2, p3, ncol=3)
+p4 <- plot_resid_gg(y, clust='6', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='CD8+ T Cells, cluster 6')
+p2 <- plot_resid_gg(y, clust='2', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='Plasma Cells, cluster 2')
+p5 <- plot_resid_gg(y, clust='1', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='Macrophages, cluster 1')
+p1 <- plot_resid_gg(y, clust='12', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='B Cells, cluster 12')
+p3 <- plot_resid_gg(y, clust='7', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='CD4+ T Cells, cluster 7')
+p6 <- plot_resid_gg(y, clust='13', regress_out='sex', split_by='condition', split_by_levels=c('PBS', 'Ad-HA/NP', 'Ad-HA/NP+Ad-IL1b', 'pH1N1'), col_by='sex', gene=IFI6, main='cDCs, cluster 13')
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol=3)
 dev.off()
 
 ```
@@ -583,11 +738,11 @@ Save everything
 # Update shiny app to filtered data for easier visualization and identification
 sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
-#saveRDS(sce_all_filt, file='shiny_app/data.rds')
+saveRDS(sce_all_filt, file='shiny_app/data.rds')
 
 sessionInfo()
 save(sce_all_filt, file='Data/sce_all_filt.RData')
-#save(list=ls(), file='ongoing_full_diff.RData') 
+save(list=ls(), file='ongoing_full_diff.RData') 
 ```
 
 

@@ -1,0 +1,104 @@
+---
+title: "Treg_pseudobulk_volcanoes"
+author: "Andrew_Muir"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+Short script to generate volcano plots of differentially expressed genes from Tregs derived from the pseudobulk analysis in 'differential_all.Rmd'.
+
+packages
+```{r packages}
+library(ggplot2)
+library(ggrepel)
+library(gridExtra)
+```
+
+data
+```{r data}
+HANP_Data <- read.table('Results/DE_AdHANP_cluster_10.txt', header = TRUE, sep = "\t")
+IL1b_Data <- read.table('Results/DE_AdHANPAdIL1b_cluster_10.txt', header = TRUE, sep = "\t")
+PH1N1_Data <- read.table('Results/DE_pH1N1_cluster_10.txt', header = TRUE, sep = "\t")
+```
+
+plot
+```{r plot}
+# Condition-Infected
+# add a column of NAs
+PH1N1_Data$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and FDR < 0.05, set as "UP" 
+PH1N1_Data$diffexpressed[PH1N1_Data$logFC > 0.6 & PH1N1_Data$FDR < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and FDR < 0.05, set as "DOWN"
+PH1N1_Data$diffexpressed[PH1N1_Data$logFC < -0.6 & PH1N1_Data$FDR < 0.05] <- "DOWN"
+PH1N1_Data$delabel <- NA
+PH1N1_Data$delabel[PH1N1_Data$diffexpressed != "NO"] <- PH1N1_Data$symbol[PH1N1_Data$diffexpressed != "NO"]
+
+p3 <- ggplot(data=PH1N1_Data, aes(x = logFC, y = -log10(FDR), col=diffexpressed, label=delabel)) + 
+  geom_point() + 
+  theme_minimal() +
+  geom_text_repel() +
+  labs(title="Tregs, pH1N1") + ylab("-log(p value)") +
+  xlim(-4, 4) + ylim(0, 5) + 
+  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
+
+# Condition-Vaccinated+IL1b
+# add a column of NAs
+IL1b_Data$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and FDR < 0.05, set as "UP" 
+IL1b_Data$diffexpressed[IL1b_Data$logFC > 0.6 & IL1b_Data$FDR < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and FDR < 0.05, set as "DOWN"
+IL1b_Data$diffexpressed[IL1b_Data$logFC < -0.6 & IL1b_Data$FDR < 0.05] <- "DOWN"
+IL1b_Data$delabel <- NA
+IL1b_Data$delabel[IL1b_Data$diffexpressed != "NO"] <- IL1b_Data$symbol[IL1b_Data$diffexpressed != "NO"]
+
+
+p2 <- ggplot(data=IL1b_Data, aes(x = logFC, y = -log10(FDR), col=diffexpressed, label=delabel)) + 
+  geom_point() + 
+  theme_minimal() +
+  geom_text_repel() +
+  labs(title="Tregs, Ad-HA/NP+Ad-IL1b") + ylab("-log(p value)") +
+  xlim(-4, 4) + ylim(0, 5) + 
+  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
+
+# vaccinated
+# add a column of NAs
+HANP_Data$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and FDR < 0.05, set as "UP" 
+HANP_Data$diffexpressed[HANP_Data$logFC > 0.6 & HANP_Data$FDR < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and FDR < 0.05, set as "DOWN"
+HANP_Data$diffexpressed[HANP_Data$logFC < -0.6 & HANP_Data$FDR < 0.05] <- "DOWN"
+HANP_Data$delabel <- NA
+HANP_Data$delabel[HANP_Data$diffexpressed != "NO"] <- HANP_Data$symbol[HANP_Data$diffexpressed != "NO"]
+
+
+p1 <- ggplot(data=HANP_Data, aes(x = logFC, y = -log10(FDR), col=diffexpressed, label=delabel)) + 
+  geom_point() + 
+  theme_minimal() +
+  geom_text_repel() +
+  labs(title="Tregs, Ad-HA/NP") + ylab("-log(p value)") +
+  xlim(-4, 4) + ylim(0, 5) + 
+  geom_vline(xintercept=c(-0.6, 0.6), col="red") +
+  geom_hline(yintercept=-log10(0.05), col="red") +
+  scale_color_manual(values=c("blue", "black", "red"), breaks=c("DOWN", "NO", "UP"))
+
+
+png(filename='Results/Treg_pseudobulk_volcanoes.png', height=1080, width=2160)
+grid.arrange(p1, p2, p3, nrow=1)
+dev.off()
+```
+
+save
+```{r save}
+sessionInfo()
+save(list=ls(), file='Treg_pseudobulk_volcanoes') 
+```
+
