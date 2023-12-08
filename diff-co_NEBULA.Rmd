@@ -576,6 +576,22 @@ NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Ma
 
 ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data")
 
+# Create single table of NEBULA results to export
+rm(All_NEBULA_Results)
+All_NEBULA_Results <- data.frame()
+n <- 0
+for (Data in NEBULA_Data) {
+  n <- n + 1
+  NEBULA_Results <- Data
+  ID <- ID_List[n]
+  ID <- gsub("broad", "AllCells", ID, fixed=TRUE)
+  NEBULA_Results$dataset <- ID
+  NEBULA_Results$delabel <- NULL
+  All_NEBULA_Results <- rbind(All_NEBULA_Results, NEBULA_Results)
+}
+
+write.table(All_NEBULA_Results, "Results/All_NEBULA_Results.txt", sep="\t", quote=FALSE, col.names=NA)
+
 # GO iteration
 DiffGenes <- function(allScore){
   return(allScore < 0.01)

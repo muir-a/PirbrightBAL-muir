@@ -320,10 +320,13 @@ colour_df <- colour_df[match(xAxis, colour_df$long_named_cluster),]
 identical(colour_df$long_named_cluster, xAxis)
 Col_Colours <- as.character(colour_df$colour)
 
-png(filename='Results/heatmap_defining_genes.png', height=2160, width=3840)
-heatmap.2(defining_matrix, margins=c(20,20), scale="row", col = bluered(100), cexRow=2, cexCol=2,  trace="none", key=TRUE, key.xlab="row Z-score", lhei=c(1,10), lwid=c(1,10), ColSideColors=c(Col_Colours))
+png(filename='Results/heatmap_defining_genes.png', height=2160, width=1080)
+heatmap.2(defining_matrix, margins=c(40,20), scale="row", col = bluered(100), cexRow=4, cexCol=4,  trace="none", key=FALSE, key.xlab="row Z-score", lhei=c(1,20), lwid=c(1,8), ColSideColors=c(Col_Colours))
 dev.off()
 
+png(filename='Results/heatmap_defining_genes_scale.png', height=1080, width=1080)
+heatmap.2(defining_matrix, scale="row", col = bluered(100), cexRow=4, cexCol=4,  trace="none", key=TRUE, keysize=2, key.title="", key.xlab="row Z-score", lhei=c(1,9), lwid=c(1,2), ColSideColors=c(Col_Colours))
+dev.off()
 ```
 And a bubbleplot of defining genes
 ```{r}
@@ -481,7 +484,7 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
 pdf('Results/Treg_prop_CD4.pdf', height=10, width=10)
 ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   geom_boxplot(na.rm=TRUE) +
-  geom_point(aes(col=Sex), position='jitter', size=4) +
+  geom_point(aes(col=Sex), position='jitter', size=6) +
   labs(x=NULL) +
   theme_classic() +
   theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
