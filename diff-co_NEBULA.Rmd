@@ -444,6 +444,68 @@ venn diagrams of shared genes
 ```{r VennDiagrams}
 library(vctrs)
 library(venndir)
+set_colours <- c('#FF999A', '#B2DF8A', '#33A02C', '#A6CEE3')
+theme_set(theme_minimal(base_size = 25))
+
+# make function to create sets from NEBULA Data
+Create_Set <- function(Data){
+  DE_subset <- Data[Data$diffexpressed != "NO",]
+  DE_subset <- Data[(Data$diffexpressed == "UP") | (Data$adj.P.Val < 0.001),]
+  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
+  DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
+  Set <- DE_subset$diffexpressed == "UP"
+  Set[Set == TRUE] <- 1
+  Set[Set == FALSE] <- -1
+  names(Set) <- DE_subset$ID
+  return(Set)
+}
+
+png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
+PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
+PH1N1_Set <- list_drop_empty(PH1N1_Set)
+options("warn"=-1)
+venndir(PH1N1_Set, main="pH1N1", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(2,2), overlap_type="each")
+dev.off()
+
+png(filename='Results/Venn_HANP.png', height=1080, width=2500)
+HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
+HANP_Set <- list_drop_empty(HANP_Set)
+options("warn"=-1)
+venndir(HANP_Set, main="Ad-HA/NP", poly_alpha=0.5, proportional=TRUE, set_colors = c('#FF999A', '#A6CEE3'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
+dev.off()
+
+png(filename='Results/Venn_IL1b.png', height=1080, width=2160)
+IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
+IL1b_Set <- list_drop_empty(IL1b_Set)
+options("warn"=-1)
+venndir(IL1b_Set, main="Ad-HA/NP Ad-IL1b", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
+dev.off()
+
+Create_Set2 <- function(Data){
+  #DE_subset <- Data[Data$diffexpressed != "NO",]
+  DE_subset <- Data[Data$adj.P.Val < 0.05,]
+  DE_subset <- DE_subset[(DE_subset$logFC > 0.6) | (DE_subset$logFC < -0.6),]
+  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
+  DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
+  Set <- DE_subset$diffexpressed == "UP"
+  Set[Set == TRUE] <- 1
+  Set[Set == FALSE] <- -1
+  names(Set) <- DE_subset$ID
+  return(Set)
+}
+
+png(filename='Results/Venn_IFI6.png', height=1080, width=2500)
+IFI6_Set = list(Macrophages=Create_Set2(IFI6_Macrophages_Data), CD4_T_Cells=Create_Set2(IFI6_CD4TCells_Data), CD8_T_Cells=Create_Set2(IFI6_CD8TCells_Data), B_Cells=Create_Set2(IFI6_BCells_Data))
+IFI6_Set <- list_drop_empty(IFI6_Set)
+options("warn"=-1)
+venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(3,3), overlap_type="each")
+dev.off()
+
+```
+old venn diagrams (unused)
+```{r oldVenn, eval=FALSE}
+library(vctrs)
+library(venndir)
 set_colours <- c('#E31A1C', '#B2DF8A', '#33A02C', '#A6CEE3')
 theme_set(theme_minimal(base_size = 25))
 
@@ -500,8 +562,8 @@ IFI6_Set <- list_drop_empty(IFI6_Set)
 options("warn"=-1)
 venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(2,2,1), item_cex = c(1.5,2), overlap_type="each")
 dev.off()
-
 ```
+
 
 create functions and run topGO enrichment on differentially expressed genes
 ```{r GO-functions}
@@ -513,6 +575,22 @@ five_colours <- c('#898888', '#E31A1C', '#6DE602', '#33A02C', '#00A7FF')
 NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_broad_Data, IFI6_BCells_Data, IFI6_Macrophages_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data)
 
 ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data")
+
+# Create single table of NEBULA results to export
+rm(All_NEBULA_Results)
+All_NEBULA_Results <- data.frame()
+n <- 0
+for (Data in NEBULA_Data) {
+  n <- n + 1
+  NEBULA_Results <- Data
+  ID <- ID_List[n]
+  ID <- gsub("broad", "AllCells", ID, fixed=TRUE)
+  NEBULA_Results$dataset <- ID
+  NEBULA_Results$delabel <- NULL
+  All_NEBULA_Results <- rbind(All_NEBULA_Results, NEBULA_Results)
+}
+
+write.table(All_NEBULA_Results, "Results/All_NEBULA_Results.txt", sep="\t", quote=FALSE, col.names=NA)
 
 # GO iteration
 DiffGenes <- function(allScore){
