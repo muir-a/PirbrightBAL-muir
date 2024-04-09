@@ -450,7 +450,7 @@ theme_set(theme_minimal(base_size = 25))
 # make function to create sets from NEBULA Data
 Create_Set <- function(Data){
   DE_subset <- Data[Data$diffexpressed != "NO",]
-  DE_subset <- Data[(Data$diffexpressed == "UP") | (Data$adj.P.Val < 0.001),]
+  DE_subset <- Data[(Data$diffexpressed == "UP") | (Data$adj.P.Val < 0.01),]
   DE_subset <- DE_subset[!is.na(DE_subset$ID),]
   DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
   Set <- DE_subset$diffexpressed == "UP"
@@ -464,21 +464,21 @@ png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
 PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
 PH1N1_Set <- list_drop_empty(PH1N1_Set)
 options("warn"=-1)
-venndir(PH1N1_Set, main="pH1N1", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(2,2), overlap_type="each")
+venndir(PH1N1_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(2,2), overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_HANP.png', height=1080, width=2500)
 HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
 HANP_Set <- list_drop_empty(HANP_Set)
 options("warn"=-1)
-venndir(HANP_Set, main="Ad-HA/NP", poly_alpha=0.5, proportional=TRUE, set_colors = c('#FF999A', '#A6CEE3'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
+venndir(HANP_Set, poly_alpha=0.5, proportional=TRUE, set_colors = c('#FF999A', '#A6CEE3'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_IL1b.png', height=1080, width=2160)
 IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
 IL1b_Set <- list_drop_empty(IL1b_Set)
 options("warn"=-1)
-venndir(IL1b_Set, main="Ad-HA/NP Ad-IL1b", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
+venndir(IL1b_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
 dev.off()
 
 Create_Set2 <- function(Data){
@@ -502,68 +502,6 @@ venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, l
 dev.off()
 
 ```
-old venn diagrams (unused)
-```{r oldVenn, eval=FALSE}
-library(vctrs)
-library(venndir)
-set_colours <- c('#E31A1C', '#B2DF8A', '#33A02C', '#A6CEE3')
-theme_set(theme_minimal(base_size = 25))
-
-# make function to create sets from NEBULA Data
-Create_Set <- function(Data){
-  #DE_subset <- Data[Data$diffexpressed != "NO",]
-  DE_subset <- Data[Data$adj.P.Val < 0.01,]
-  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
-  DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
-  Set <- DE_subset$diffexpressed == "UP"
-  Set[Set == TRUE] <- 1
-  Set[Set == FALSE] <- -1
-  names(Set) <- DE_subset$ID
-  return(Set)
-}
-
-png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
-PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
-PH1N1_Set <- list_drop_empty(PH1N1_Set)
-options("warn"=-1)
-venndir(PH1N1_Set, main="pH1N1", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(1,2), overlap_type="each")
-dev.off()
-
-png(filename='Results/Venn_HANP.png', height=1080, width=2160)
-HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
-HANP_Set <- list_drop_empty(HANP_Set)
-options("warn"=-1)
-venndir(HANP_Set, main="Ad-HA/NP", poly_alpha=0.5, proportional=TRUE, set_colors = c('#E31A1C', '#33A02C'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
-dev.off()
-
-png(filename='Results/Venn_IL1b.png', height=1080, width=2160)
-IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
-IL1b_Set <- list_drop_empty(IL1b_Set)
-options("warn"=-1)
-venndir(IL1b_Set, main="Ad-HA/NP Ad-IL1b", poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
-dev.off()
-
-Create_Set2 <- function(Data){
-  #DE_subset <- Data[Data$diffexpressed != "NO",]
-  DE_subset <- Data[Data$adj.P.Val < 0.05,]
-  DE_subset <- DE_subset[(DE_subset$logFC > 0.3) | (DE_subset$logFC < -0.3),]
-  DE_subset <- DE_subset[!is.na(DE_subset$ID),]
-  DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
-  Set <- DE_subset$diffexpressed == "UP"
-  Set[Set == TRUE] <- 1
-  Set[Set == FALSE] <- -1
-  names(Set) <- DE_subset$ID
-  return(Set)
-}
-
-png(filename='Results/Venn_IFI6.png', height=1080, width=2160)
-IFI6_Set = list(Macrophages=Create_Set2(IFI6_Macrophages_Data), CD4_T_Cells=Create_Set2(IFI6_CD4TCells_Data), CD8_T_Cells=Create_Set2(IFI6_CD8TCells_Data), B_Cells=Create_Set2(IFI6_BCells_Data))
-IFI6_Set <- list_drop_empty(IFI6_Set)
-options("warn"=-1)
-venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(2,2,1), item_cex = c(1.5,2), overlap_type="each")
-dev.off()
-```
-
 
 create functions and run topGO enrichment on differentially expressed genes
 ```{r GO-functions}
@@ -619,7 +557,7 @@ for (Data in NEBULA_Data) {
 
 write.table(All_GO_Results, "Results/All_GO_Results.txt", sep="\t", quote=FALSE, col.names=NA)
 
-s# bubbleplot
+# bubbleplot
 theme_set(theme_minimal(base_size = 25))
 
 GO_pH1N1 <- All_GO_Results[grep("PH1N1", All_GO_Results$dataset),]
@@ -628,10 +566,10 @@ GO_pH1N1 <- GO_pH1N1[GO_pH1N1$Significant > 4,]
 
 png(filename='Results/GO_pH1N1.png', height=1080, width=1080)
 ggplot(GO_pH1N1, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
-  geom_text_repel(size=6, max.overlaps = 5) + 
+  geom_text_repel(size=8, max.overlaps = 5) + 
   geom_hline(yintercept=-log10(0.05), col="red") +
   geom_jitter(width = 0.2, height = 0) +
-  labs(color=NULL, size="count DE genes", title="pH1N1") + 
+  labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
   scale_color_manual(values=five_colours) +
@@ -648,7 +586,7 @@ ggplot(GO_HANP, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   geom_text_repel(size=7, max.overlaps = 5) + 
   geom_hline(yintercept=-log10(0.05), col="red") +
   geom_jitter(width = 0.2, height = 0) +
-  labs(color=NULL, size="count DE genes", title="Ad-HA/NP") + 
+  labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
   scale_color_manual(values=five_colours) +
@@ -662,10 +600,10 @@ GO_IL1b <- GO_IL1b[GO_IL1b$Significant > 4,]
 
 png(filename='Results/GO_IL1b.png', height=1080, width=1080)
 ggplot(GO_IL1b, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
-  geom_text_repel(size=6, max.overlaps = 5) + 
+  geom_text_repel(size=7, max.overlaps = 5) + 
   geom_hline(yintercept=-log10(0.05), col="red") +
   geom_jitter(width = 0.2, height = 0) +
-  labs(color=NULL, size="count DE genes", title="Ad-HA/NP+IL1b") + 
+  labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
   scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
   scale_color_manual(values=five_colours) +

@@ -71,11 +71,6 @@ range(GetAssayData(object = pigPBMC, slot = "counts"))
 mean(counts(pigBALsce))
 mean(GetAssayData(object = pigPBMC, slot = "counts"))
 
-#p1 <- hist(counts(pigBALsce)[counts(pigBALsce) != 0])
-#p2 <- hist(GetAssayData(object = pigPBMC, slot = "counts")[GetAssayData(object = pigPBMC, slot = "counts") != 0])
-#plot( p1, col=rgb(0,0,1,1/4), xlim=c(0,100))  
-#plot( p2, col=rgb(1,0,0,1/4), xlim=c(0,100), add=T)
-
 ```
 BAL dataset has 3000 more genes and twice as many cells as PBMC. 
 
