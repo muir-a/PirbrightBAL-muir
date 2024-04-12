@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Intro
 
-Following on from 'differential all'. This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) with the end goal of revealing putative causal networks. 
+Following on from 'differential_all'. This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression). 
 
 **RAM requirements scale exponentially with CPU cores**
 
@@ -445,7 +445,7 @@ venn diagrams of shared genes
 library(vctrs)
 library(venndir)
 set_colours <- c('#FF999A', '#B2DF8A', '#33A02C', '#A6CEE3')
-theme_set(theme_minimal(base_size = 25))
+theme_set(theme_minimal(base_size = 35))
 
 # make function to create sets from NEBULA Data
 Create_Set <- function(Data){
@@ -460,31 +460,31 @@ Create_Set <- function(Data){
   return(Set)
 }
 
-png(filename='Results/Venn_PH1N1.png', height=1080, width=2160)
+png(filename='Results/Venn_PH1N1.png', height=1080, width=1600)
 PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
-PH1N1_Set <- list_drop_empty(PH1N1_Set)
+#PH1N1_Set <- list_drop_empty(PH1N1_Set)
 options("warn"=-1)
-venndir(PH1N1_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(2,2), overlap_type="each")
+venndir(PH1N1_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
 dev.off()
 
-png(filename='Results/Venn_HANP.png', height=1080, width=2500)
+png(filename='Results/Venn_HANP.png', height=1080, width=1600)
 HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
-HANP_Set <- list_drop_empty(HANP_Set)
+#HANP_Set <- list_drop_empty(HANP_Set)
 options("warn"=-1)
-venndir(HANP_Set, poly_alpha=0.5, proportional=TRUE, set_colors = c('#FF999A', '#A6CEE3'), label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 4, overlap_type="each")
+venndir(HANP_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
 dev.off()
 
-png(filename='Results/Venn_IL1b.png', height=1080, width=2160)
+png(filename='Results/Venn_IL1b.png', height=1080, width=1600)
 IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
-IL1b_Set <- list_drop_empty(IL1b_Set)
+#IL1b_Set <- list_drop_empty(IL1b_Set)
 options("warn"=-1)
-venndir(IL1b_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = 2.5, overlap_type="each")
+venndir(IL1b_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
 dev.off()
 
 Create_Set2 <- function(Data){
   #DE_subset <- Data[Data$diffexpressed != "NO",]
   DE_subset <- Data[Data$adj.P.Val < 0.05,]
-  DE_subset <- DE_subset[(DE_subset$logFC > 0.6) | (DE_subset$logFC < -0.6),]
+  DE_subset <- DE_subset[(DE_subset$logFC > 0.3) | (DE_subset$logFC < -0.3),]
   DE_subset <- DE_subset[!is.na(DE_subset$ID),]
   DE_subset <- DE_subset[!grepl("ENSSSCG", DE_subset$ID, fixed = TRUE),]
   Set <- DE_subset$diffexpressed == "UP"
@@ -494,13 +494,84 @@ Create_Set2 <- function(Data){
   return(Set)
 }
 
-png(filename='Results/Venn_IFI6.png', height=1080, width=2500)
+png(filename='Results/Venn_IFI6.png', height=1080, width=1600)
 IFI6_Set = list(Macrophages=Create_Set2(IFI6_Macrophages_Data), CD4_T_Cells=Create_Set2(IFI6_CD4TCells_Data), CD8_T_Cells=Create_Set2(IFI6_CD8TCells_Data), B_Cells=Create_Set2(IFI6_BCells_Data))
-IFI6_Set <- list_drop_empty(IFI6_Set)
+#IFI6_Set <- list_drop_empty(IFI6_Set)
 options("warn"=-1)
-venndir(IFI6_Set, poly_alpha=0.5, proportional=TRUE, set_colors = set_colours, label_preset="main items", show_items = c("sign item"), font_cex = c(3,2,1), item_cex = c(3,3), overlap_type="each")
+venndir(IFI6_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
 dev.off()
 
+```
+create tables of shared genes to accompany venn diagrams
+```{r shared-gene-tables, eval=F}
+library(dplyr)
+
+#create function to convert sets into lists of genes for each possible combination, colour by up or down regulation (purple for both)
+#convert 4 sets into 15 sets, numerical into vector
+set_to_df <- function(setlist){
+#chain intersects to get genes in all four
+All_4_names <- intersect(intersect(intersect(names(setlist$Macrophages),
+                                             names(setlist$CD4_T_Cells)),
+                                   names(setlist$CD8_T_Cells)),
+                         names(setlist$B_Cells))
+All_4 <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% All_4_names],
+           setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% All_4_names],
+           setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% All_4_names],
+           setlist$B_Cells[names(setlist$B_Cells) %in% All_4_names])
+# retrieve diffs between 1 and 3 to get solo genes
+Macro_only <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% setdiff(names(setlist$Macrophages), c(names(setlist$CD4_T_Cells), names(setlist$CD8_T_Cells), names(setlist$B_Cells)))])
+CD4_only <- bind_rows(setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% setdiff(names(setlist$CD4_T_Cells), c(names(setlist$Macrophages), names(setlist$CD8_T_Cells), names(setlist$B_Cells)))])
+CD8_only <- bind_rows(setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% setdiff(names(setlist$CD8_T_Cells), c(names(setlist$Macrophages), names(setlist$CD4_T_Cells), names(setlist$B_Cells)))])
+B_only <- bind_rows(setlist$B_Cells[names(setlist$B_Cells) %in% setdiff(names(setlist$B_Cells), c(names(setlist$Macrophages), names(setlist$CD4_T_Cells), names(setlist$CD8_T_Cells)))])
+# get all in 2 but not in other 2 to get 2
+Macro_CD4_names <- setdiff(intersect(names(setlist$Macrophages), names(setlist$CD4_T_Cells)), c(names(setlist$CD8_T_Cells), names(setlist$B_Cells)))
+Macro_CD4 <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_CD4_names],
+                   setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% Macro_CD4_names])
+#
+Macro_CD8_names <- setdiff(intersect(names(setlist$Macrophages), names(setlist$CD8_T_Cells)), c(names(setlist$CD4_T_Cells), names(setlist$B_Cells)))
+Macro_CD8 <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_CD8_names],
+                   setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% Macro_CD8_names])
+#
+Macro_B_names <- setdiff(intersect(names(setlist$Macrophages), names(setlist$B_Cells)), c(names(setlist$CD4_T_Cells), names(setlist$CD8_T_Cells)))
+Macro_B <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_B_names],
+                   setlist$B_Cells[names(setlist$B_Cells) %in% Macro_B_names])
+#
+CD4_CD8_names <- setdiff(intersect(names(setlist$CD4_T_Cells), names(setlist$CD8_T_Cells)), c(names(setlist$Macrophages), names(setlist$B_Cells)))
+CD4_CD8 <- bind_rows(setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% CD4_CD8_names],
+                   setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% CD4_CD8_names])
+#
+CD4_B_names <- setdiff(intersect(names(setlist$CD4_T_Cells), names(setlist$B_Cells)), c(names(setlist$Macrophages), names(setlist$CD8_T_Cells)))
+CD4_B <- bind_rows(setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% CD4_B_names],
+                   setlist$B_Cells[names(setlist$B_Cells) %in% CD4_B_names])
+#
+CD8_B_names <-setdiff(intersect(names(setlist$B_Cells), names(setlist$CD8_T_Cells)), c(names(setlist$Macrophages), names(setlist$CD4_T_Cells)))
+CD8_B <- bind_rows(setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% CD8_B_names],
+                   setlist$B_Cells[names(setlist$B_Cells) %in% CD8_B_names])
+# chain intersect 3, out 1, get 3
+Macro_CD4_CD8_names <- setdiff(intersect(intersect(names(setlist$Macrophages), names(setlist$CD4_T_Cells)), names(setlist$CD8_T_Cells)), names(setlist$B_Cells))
+Macro_CD4_CD8 <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_CD4_CD8_names],
+                       setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% Macro_CD4_CD8_names],
+                       setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% Macro_CD4_CD8_names])
+#
+Macro_CD4_B_names <- setdiff(intersect(intersect(names(setlist$Macrophages), names(setlist$CD4_T_Cells)), names(setlist$B_Cells)), names(setlist$CD8_T_Cells))
+Macro_CD4_B <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_CD4_B_names],
+                       setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% Macro_CD4_B_names],
+                       setlist$B_Cells[names(setlist$B_Cells) %in% Macro_CD4_B_names])
+#
+Macro_CD8_B_names <- setdiff(intersect(intersect(names(setlist$Macrophages), names(setlist$CD8_T_Cells)), names(setlist$B_Cells)), names(setlist$CD4_T_Cells))
+Macro_CD8_B <- bind_rows(setlist$Macrophages[names(setlist$Macrophages) %in% Macro_CD8_B_names],
+                       setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% Macro_CD8_B_names],
+                       setlist$B_Cells[names(setlist$B_Cells) %in% Macro_CD8_B_names])
+#
+CD4_CD8_B_names <- setdiff(intersect(intersect(names(setlist$CD4_T_Cells), names(setlist$CD8_T_Cells)), names(setlist$B_Cells)), names(setlist$Macrophages))
+CD4_CD8_B <- bind_rows(setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% CD4_CD8_B_names],
+                       setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% CD4_CD8_B_names],
+                       setlist$B_Cells[names(setlist$B_Cells) %in% CD4_CD8_B_names])
+  
+All_Combs <- list(Macro_only, CD4_only, CD8_only, B_only, Macro_CD4, Macro_CD8, Macro_B, CD4_CD8, CD4_B, Macro_CD4_CD8, Macro_CD4_B, Macro_CD8_B, CD4_CD8_B, All_4)
+# create colour list of lists, red for up, blue for down , purple for mix
+Colour_list <- 
+}
 ```
 
 create functions and run topGO enrichment on differentially expressed genes

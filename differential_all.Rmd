@@ -1,6 +1,6 @@
 ---
 title: "DifferentialAnalysesPigBAL"
-author: "Arianne Richard"
+author: "Arianne Richard and Andrew Muir"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This script picks up where "clustering all.Rmd" left off. 
 
-We will start by labelling the clusters and doing some filtering to narrow to those clusters that we intend to run differential analyses on. We will then run differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female mice for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
+We will start by labelling the clusters and doing some filtering to narrow to those clusters that we intend to run differential analyses on. We will then run differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female pigs for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
 
 # Loading the data
 

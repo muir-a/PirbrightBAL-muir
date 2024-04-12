@@ -555,7 +555,7 @@ Write a data file to use in a shiny app for annotation.
 # for easier visualization in app, pre-convert counts metrics to log scale
 sce_all_corrected$log2_sum_counts <- log2(sce_all_corrected$sum_counts)
 sce_all_corrected$log2_genes_detected <- log2(sce_all_corrected$genes_detected)
-# saveRDS(sce_all_corrected, file='shiny_app/data.rds')
+saveRDS(sce_all_corrected, file='shiny_app/data.rds')
 ```
 
 Save everything
