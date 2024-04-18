@@ -503,8 +503,28 @@ dev.off()
 
 ```
 create tables of shared genes to accompany venn diagrams
-```{r shared-gene-tables, eval=F}
+```{r shared-gene-tables}
 library(dplyr)
+
+#red for up, blue for down , purple for mix
+#since changed to append up, down, mixed, to use Excel's conditional formatting
+set_gene_colour <- function(n_v){
+  colour_vector <- c()
+  for(value in n_v){
+  if(length(value) == 0){
+    colour <- "NA"
+    next
+  }
+  if(any(1==value)){
+    colour <- "-Up"}
+  if(any(-1==value)){
+    colour <- "-Down"}
+  if(any(1==value) & any(-1==value)){
+    colour <- "-Mixed"}
+    colour_vector <- c(colour_vector, colour)
+  }
+  return(colour_vector)
+}
 
 #create function to convert sets into lists of genes for each possible combination, colour by up or down regulation (purple for both)
 #convert 4 sets into 15 sets, numerical into vector
@@ -569,9 +589,31 @@ CD4_CD8_B <- bind_rows(setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% CD4_C
                        setlist$B_Cells[names(setlist$B_Cells) %in% CD4_CD8_B_names])
   
 All_Combs <- list(Macro_only, CD4_only, CD8_only, B_only, Macro_CD4, Macro_CD8, Macro_B, CD4_CD8, CD4_B, Macro_CD4_CD8, Macro_CD4_B, Macro_CD8_B, CD4_CD8_B, All_4)
-# create colour list of lists, red for up, blue for down , purple for mix
-Colour_list <- 
+All_Names <- c("Macrophages Only", "CD4 T Cells Only", "CD8 T Cells Only", "B Cells Only", "Macrophages/CD4 T Cells",  "Macrophages/CD8 T Cells", "Macrophages/B Cells", "CD4 T Cells/CD8 T Cells", "CD4 T Cells/B Cells", "Macrophages/CD4 T Cells/CD8 T Cells", "Macrophages/CD4 T Cells/B Cells", "Macrophages/CD8 T Cells/B Cells", "CD4 T Cells/CD8 T Cells/B Cells", "All 4")
+# make vectors same length (fill with NA)
+max.length <- max(sapply(All_Combs,length))
+All_Combs2 <- lapply(All_Combs, "length<-", max.length) ### This breaks everything!!!!
+Export_DF <- tibble(temp = 1:max.length)
+# Extract names and make lists of colours for export table
+for(i in 1:length(All_Combs2)){
+  n_v <- All_Combs2[[i]]
+  gene_vector <- names(n_v)
+  colour_vector <- set_gene_colour(n_v)
+  new_vector <- paste0(gene_vector, colour_vector)
+  Title <- All_Names[[i]]
+    if(length(new_vector)==0){
+    new_vector <- rep(NA, max.length)
+    }
+  Export_DF[[Title]] <- new_vector
 }
+Export_DF <- Export_DF[,names(Export_DF) != "temp"]
+return(Export_DF)
+}
+
+write.csv(set_to_df(HANP_Set), "Results/NEBULA_HANP_genetable.csv")
+write.csv(set_to_df(IL1b_Set), "Results/NEBULA_IL1b_genetable.csv")
+write.csv(set_to_df(PH1N1_Set), "Results/NEBULA_PH1N1_genetable.csv")
+write.csv(set_to_df(IFI6_Set), "Results/NEBULA_IFI6_genetable.csv")
 ```
 
 create functions and run topGO enrichment on differentially expressed genes
