@@ -26,7 +26,7 @@ Directory should look like this for each sample folder:
 Scripts in this directory are run in the following order:
 
 1. **processing_all.Rmd** 
-*Reads in cellranger output (see above) and performs initial filtering and QC. *
+*Reads in cellranger output (see above) and performs initial filtering and QC.*
 2. **clustering_all.Rmd** 
 *Clustering and cluster inspection.*
 3. **differential_all.Rmd** 
