@@ -1,6 +1,6 @@
 ---
 title: "DifferentialAnalysesPigBAL"
-author: "Arianne Richard"
+author: "Arianne Richard and Andrew Muir"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This script picks up where "clustering all.Rmd" left off. 
 
-We will start by labelling the clusters and doing some filtering to narrow to those clusters that we intend to run differential analyses on. We will then run differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female mice for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
+We will start by labelling the clusters and doing some filtering to narrow to those clusters that we intend to run differential analyses on. We will then run differential analyses between conditions. Specifically, we will be looking for differential abundance of cells within each cluster, as well as differential expression of cells within each cluster, according to treatment condition. There are 4 conditions: PBS, Ad-HA/NP, Ad-HA/NP+Ad-IL1b, pH1N1. There are male and female pigs for each group, but sex is almost completely confounded with sets of runs, so we are unable to account for both of these in the same model. We will address this problem in both differential abundance and differential expression analyses. 
 
 # Loading the data
 
@@ -211,8 +211,8 @@ plot1 <- plotUMAP(sce_filt, point_size=0) +
 grid.arrange(plot1, plot0, ncol=2)
 dev.off()
 ```
-investigate FOXP3 and Tregs
-```{r}
+investigate FOXP3 and Tregs (peer question)
+```{r, eval=FALSE}
 library(viridis)
 #FOXP3 = "ENSSSCG00000012300"
 sce_FOXP3 <- sce_filt
@@ -276,6 +276,36 @@ dev.off()
 #rm(sce_FOXP3)
 
 ```
+investigate CD25+ cells (reviewer question)
+```{r, eval=FALSE}
+sce_CD25 <- sce_filt
+
+rowData(sce_filt)[grep("IL2RA", rowData(sce_filt)$Symbol),]
+#CD25 = ENSSSCG00000022849
+
+names(rowData(sce_CD25))[which(names(rowData(sce_CD25))=="start")]="gene_start"
+names(rowData(sce_CD25))[which(names(rowData(sce_CD25))=="end")]="gene_end"
+range(as.vector(logcounts(sce_CD25['ENSSSCG00000022849' ,])))
+range(as.vector(assay(sce_CD25['ENSSSCG00000022849' ,], "reconstructed")))
+
+png(filename='Results/UMAP_CD25.png', height=2160, width=2160)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000022849", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.035))
+dev.off()
+
+# delete cells that show no CD25 expression
+
+sce_CD25 <- sce_CD25[, assay(sce_CD25, "reconstructed")['ENSSSCG00000022849', ] > 0.001]
+
+png(filename='Results/UMAP_CD25_low_to_high.png', height=2160, width=2160)
+plotUMAP(sce_CD25, colour_by="ENSSSCG00000022849", point_size=0.3, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = turbo(20), limits=c(0.01,0.025))
+dev.off()
+
+```
+
 
 And a TSNE for supplementary
 ```{r}
@@ -490,6 +520,15 @@ ggplot(data=proptab, aes(x=Condition, y=proportions)) +
   theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
 dev.off()
 
+# grab numerical values for PLOS publication requirements
+pp <- ggplot(data=proptab, aes(x=Condition, y=proportions)) +
+  geom_boxplot(na.rm=TRUE) +
+  geom_point(aes(col=Sex), position='jitter', size=6) +
+  labs(x=NULL) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1), text=element_text(size=21))
+
+write.csv(pp$data, file = "Results/Treg_prop_CD4.csv")
 
 ## and another format for among CD4s
 props <- prop.table(table(CD4s$cluster, CD4s$Sample), margin=2)
@@ -681,9 +720,6 @@ cols <- rep('black', times=nrow(IL1b.CD8))
 cols[IL1b.CD8$FDR < 0.05] <- 'red'
 plot(IL1b.CD8$logFC, -log10(IL1b.CD8$PValue), col=cols)
 
-
-
-
 IFI6 <- 'ENSSSCG00000034570'
 
 plot_resid_gg <- function(y, clust, regress_out, split_by, split_by_levels, col_by, gene, main, ...){
@@ -725,6 +761,19 @@ p6 <- plot_resid_gg(y, clust='13', regress_out='sex', split_by='condition', spli
 grid.arrange(p1, p2, p3, p4, p5, p6, ncol=3)
 dev.off()
 
+# export numerical values for PLOS publication requirements
+df12 <- p1$data
+colnames(df12) <- c("expression (mean logcounts per million)", "condition", "sex")
+rownames(df12) <- paste0(rep(p1$labels$title, nrow(df12)), paste0(", rowID", 1:nrow(df12)))
+export_df <- df12
+for (gg in list(p2, p3, p4, p5, p6)){
+  df <- gg$data
+  colnames(df) <- c("expression (mean logcounts per million)", "condition", "sex")
+  rownames(df) <- paste0(rep(gg$labels$title, nrow(df)), paste0(", rowID", 1:nrow(df)))
+  export_df <- rbind(export_df, df)
+}
+write.csv(export_df, file = "Results/IFI6_by_clusters.csv")
+
 ```
 
 
@@ -735,7 +784,7 @@ dev.off()
 Save everything
 
 ```{r}
-# Update shiny app to filtered data for easier visualization and identification
+# Update shiny app with filtered data for easier visualization and identification. For easier visualization in app, pre-convert counts metrics to log scale. 
 sce_all_filt$log2_sum_counts <- log2(sce_all_filt$sum_counts)
 sce_all_filt$log2_genes_detected <- log2(sce_all_filt$genes_detected)
 saveRDS(sce_all_filt, file='shiny_app/data.rds')

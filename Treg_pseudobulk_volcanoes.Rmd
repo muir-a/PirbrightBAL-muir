@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Intro
 Short script to generate volcano plots of differentially expressed genes from Tregs derived from the pseudobulk analysis in 'differential_all.Rmd'.
+Note: this script was used for responding  to reviewers comments and doesn't generate data for the related paper. 
 
 packages
 ```{r packages}
