@@ -234,7 +234,7 @@ for(i in 1:length(sce_list)){
 
 rm(sce_list_cr)
 
-save(list=ls(), file='ongoing_full.RData')
+save(list=ls(), file='ongoing.RData')
 ```
 
 So this wasn't terribly different - cellranger pipelines treated the samples similarly within 5%. We'll stick with our pipeline for now, and may very well filter to a similar number as we go on with the QC. 

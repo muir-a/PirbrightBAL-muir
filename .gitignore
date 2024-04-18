@@ -54,7 +54,9 @@ LICENSE
 *.h5seurat
 *.html
 *.RData
-*sample*/
+*.h5*
+raw_feature_bc_matrix
+filtered_feature_bc_matrix
 *analysis/
 *.pdf
 *.txt
