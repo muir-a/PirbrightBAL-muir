@@ -222,8 +222,8 @@ names(rowData(sce_FOXP3))[which(names(rowData(sce_FOXP3))=="end")]="gene_end"
 range(as.vector(logcounts(sce_FOXP3['ENSSSCG00000012300' ,])))
 range(as.vector(assay(sce_FOXP3['ENSSSCG00000012300' ,], "reconstructed")))
 
-png(filename='Results/UMAP_FOXP3.png', height=2160, width=2160)
-plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=0.3, by_exprs_values="reconstructed") + 
+png(filename='Results/UMAP_FOXP3_biggerdots.png', height=1080, width=1080)
+plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000012300", point_size=1, by_exprs_values="reconstructed") + 
   theme(text = element_text(size = 20)) + 
   scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.02))
 dev.off()
@@ -278,6 +278,7 @@ dev.off()
 ```
 investigate CD25+ cells (reviewer question)
 ```{r, eval=FALSE}
+library(viridis)
 sce_CD25 <- sce_filt
 
 rowData(sce_filt)[grep("IL2RA", rowData(sce_filt)$Symbol),]
@@ -288,8 +289,8 @@ names(rowData(sce_CD25))[which(names(rowData(sce_CD25))=="end")]="gene_end"
 range(as.vector(logcounts(sce_CD25['ENSSSCG00000022849' ,])))
 range(as.vector(assay(sce_CD25['ENSSSCG00000022849' ,], "reconstructed")))
 
-png(filename='Results/UMAP_CD25.png', height=2160, width=2160)
-plotUMAP(sce_FOXP3, colour_by="ENSSSCG00000022849", point_size=0.3, by_exprs_values="reconstructed") + 
+png(filename='Results/UMAP_CD25_biggerdots.png', height=1080, width=1080)
+plotUMAP(sce_CD25, colour_by="ENSSSCG00000022849", point_size=1, by_exprs_values="reconstructed") + 
   theme(text = element_text(size = 20)) + 
   scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.035))
 dev.off()
@@ -297,6 +298,12 @@ dev.off()
 # delete cells that show no CD25 expression
 
 sce_CD25 <- sce_CD25[, assay(sce_CD25, "reconstructed")['ENSSSCG00000022849', ] > 0.001]
+
+png(filename='Results/UMAP_CD25_biggerdots_nozero.png', height=1080, width=1080)
+plotUMAP(sce_CD25, colour_by="ENSSSCG00000022849", point_size=1, by_exprs_values="reconstructed") + 
+  theme(text = element_text(size = 20)) + 
+  scale_color_gradientn(colours = rev(rocket(256)), limits=c(0,0.035))
+dev.off()
 
 png(filename='Results/UMAP_CD25_low_to_high.png', height=2160, width=2160)
 plotUMAP(sce_CD25, colour_by="ENSSSCG00000022849", point_size=0.3, by_exprs_values="reconstructed") + 
