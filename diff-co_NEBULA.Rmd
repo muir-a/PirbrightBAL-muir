@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Intro
 
-Following on from 'differential_all'. This script delineates patterns of gene co-expression between our experimental conditions (differential co-expression) using the nebula package. 
+Following on from 'differential_all'. This script delineates patterns of differential gene expression and co-expression between our experimental conditions (differential co-expression) using the nebula package. 
 
 **RAM requirements scale exponentially with CPU cores**
 
