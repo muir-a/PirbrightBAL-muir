@@ -37,7 +37,7 @@ The following scripts can be run in any order, provided the scripts above have b
 - **Validation_vs_PBMC.Rmd** 
 *Comparative analysis between the clusters and cell types identified in the pig BAL against the reference PBMC transcriptome published by Herrera-Uribe et al. 2021 (https://doi.org/10.3389%2Ffgene.2021.689406).*
 - **diff-co_NEBULA.Rmd** 
-*Differential co-expression analysis with NEBULA as well as topGO enrichment of the identified genes.*
+*Differential expression and co-expression analysis with NEBULA as well as topGO enrichment of the identified genes.*
 - **Treg_pseudobulk_volcanoes.Rmd** 
 *Short script to generate volcano plots of differentially expressed genes from Tregs derived from the pseudobulk analysis in differential_all.Rmd. This script was used for responding  to reviewers comments and doesn't generate data for the related paper.*
 - **diff-co.Rmd**
