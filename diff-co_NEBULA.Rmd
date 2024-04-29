@@ -589,8 +589,8 @@ CD4_CD8_B <- bind_rows(setlist$CD4_T_Cells[names(setlist$CD4_T_Cells) %in% CD4_C
                        setlist$CD8_T_Cells[names(setlist$CD8_T_Cells) %in% CD4_CD8_B_names],
                        setlist$B_Cells[names(setlist$B_Cells) %in% CD4_CD8_B_names])
   
-All_Combs <- list(Macro_only, CD4_only, CD8_only, B_only, Macro_CD4, Macro_CD8, Macro_B, CD4_CD8, CD4_B, Macro_CD4_CD8, Macro_CD4_B, Macro_CD8_B, CD4_CD8_B, All_4)
-All_Names <- c("Macrophages Only", "CD4 T Cells Only", "CD8 T Cells Only", "B Cells Only", "Macrophages/CD4 T Cells",  "Macrophages/CD8 T Cells", "Macrophages/B Cells", "CD4 T Cells/CD8 T Cells", "CD4 T Cells/B Cells", "Macrophages/CD4 T Cells/CD8 T Cells", "Macrophages/CD4 T Cells/B Cells", "Macrophages/CD8 T Cells/B Cells", "CD4 T Cells/CD8 T Cells/B Cells", "All 4")
+All_Combs <- list(Macro_only, CD4_only, CD8_only, B_only, Macro_CD4, Macro_CD8, Macro_B, CD4_CD8, CD4_B, CD8_B, Macro_CD4_CD8, Macro_CD4_B, Macro_CD8_B, CD4_CD8_B, All_4)
+All_Names <- c("Macrophages Only", "CD4 T Cells Only", "CD8 T Cells Only", "B Cells Only", "Macrophages/CD4 T Cells",  "Macrophages/CD8 T Cells", "Macrophages/B Cells", "CD4 T Cells/CD8 T Cells", "CD4 T Cells/B Cells", "CD8 T Cells/B Cells", "Macrophages/CD4 T Cells/CD8 T Cells", "Macrophages/CD4 T Cells/B Cells", "Macrophages/CD8 T Cells/B Cells", "CD4 T Cells/CD8 T Cells/B Cells", "All 4")
 # make vectors same length (fill with NA)
 max.length <- max(sapply(All_Combs,length))
 All_Combs2 <- lapply(All_Combs, "length<-", max.length)
@@ -626,11 +626,11 @@ create functions and run topGO enrichment on differentially expressed genes
 library(topGO)
 library(org.Ss.eg.db)
 
-five_colours <- c('#898888', '#E31A1C', '#6DE602', '#33A02C', '#00A7FF')
+five_colours <- c( '#E31A1C', '#6DE602', '#33A02C', '#00A7FF') #used to include 'all cells', since removed
 
-NEBULA_Data <- list(PH1N1_broad_Data, HANP_broad_Data, IL1b_broad_Data, PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_broad_Data, IFI6_BCells_Data, IFI6_Macrophages_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data)
+NEBULA_Data <- list(PH1N1_Macrophages_Data, HANP_Macrophages_Data, IL1b_Macrophages_Data, PH1N1_BCells_Data, HANP_BCells_Data, IL1b_BCells_Data, PH1N1_CD4TCells_Data, HANP_CD4TCells_Data, IL1b_CD4TCells_Data, PH1N1_CD8TCells_Data, HANP_CD8TCells_Data, IL1b_CD8TCells_Data, IFI6_BCells_Data, IFI6_Macrophages_Data, IFI6_CD4TCells_Data, IFI6_CD8TCells_Data)
 
-ID_List <- c("PH1N1_broad_Data", "HANP_broad_Data", "IL1b_broad_Data", "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_broad_Data", "IFI6_BCells_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data")
+ID_List <- c( "PH1N1_Macrophages_Data", "HANP_Macrophages_Data", "IL1b_Macrophages_Data", "PH1N1_BCells_Data", "HANP_BCells_Data", "IL1b_BCells_Data", "PH1N1_CD4TCells_Data", "HANP_CD4TCells_Data", "IL1b_CD4TCells_Data", "PH1N1_CD8TCells_Data", "HANP_CD8TCells_Data", "IL1b_CD8TCells_Data", "IFI6_BCells_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data")
 
 # Create single table of NEBULA results to export
 rm(All_NEBULA_Results)
@@ -640,7 +640,7 @@ for (Data in NEBULA_Data) {
   n <- n + 1
   NEBULA_Results <- Data
   ID <- ID_List[n]
-  ID <- gsub("broad", "AllCells", ID, fixed=TRUE)
+  #ID <- gsub("broad", "AllCells", ID, fixed=TRUE)
   NEBULA_Results$dataset <- ID
   NEBULA_Results$delabel <- NULL
   All_NEBULA_Results <- rbind(All_NEBULA_Results, NEBULA_Results)
@@ -679,7 +679,7 @@ write.table(All_GO_Results, "Results/All_GO_Results.txt", sep="\t", quote=FALSE,
 theme_set(theme_minimal(base_size = 25))
 
 GO_pH1N1 <- All_GO_Results[grep("PH1N1", All_GO_Results$dataset),]
-GO_pH1N1$dataset <- factor(GO_pH1N1$dataset, levels=c("PH1N1_broad_Data", "PH1N1_Macrophages_Data", "PH1N1_CD4TCells_Data", "PH1N1_CD8TCells_Data", "PH1N1_BCells_Data"))
+GO_pH1N1$dataset <- factor(GO_pH1N1$dataset, levels=c("PH1N1_Macrophages_Data", "PH1N1_CD4TCells_Data", "PH1N1_CD8TCells_Data", "PH1N1_BCells_Data"))
 GO_pH1N1 <- GO_pH1N1[GO_pH1N1$Significant > 4,]
 
 png(filename='Results/GO_pH1N1.png', height=1080, width=1080)
@@ -689,32 +689,17 @@ ggplot(GO_pH1N1, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Signific
   geom_jitter(width = 0.2, height = 0) +
   labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
-  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
+  scale_x_discrete(labels= c("Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
   scale_color_manual(values=five_colours) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
 
 # not running HANP due to lack of significant genes
-#GO_HANP <- All_GO_Results[grep("HANP", All_GO_Results$dataset),]
-#GO_HANP$dataset <- factor(GO_HANP$dataset, levels=c("HANP_broad_Data", "HANP_Macrophages_Data", "HANP_CD4TCells_Data", "HANP_CD8TCells_Data", "HANP_BCells_Data"))
-#GO_HANP <- GO_HANP[GO_HANP$Significant > 2,]
 
-#png(filename='Results/GO_HANP.png', height=1080, width=1080)
-#ggplot(GO_HANP, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significant, label=Term, color=dataset)) +
-#  geom_text_repel(size=7, max.overlaps = 5) + 
-#  geom_hline(yintercept=-log10(0.05), col="red") +
-#  geom_jitter(width = 0.2, height = 0) +
-#  labs(color=NULL, size="count DE genes") + 
-#  ylab("-log(p-value)") + xlab(NULL) +
-#  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "CD8 T Cells", "B Cells")) +
-#  scale_color_manual(values=five_colours) +
-#  guides(color="none") + 
-#  scale_size_area(max_size = 5)
-#dev.off()
 
 GO_IL1b <- All_GO_Results[grep("IL1b", All_GO_Results$dataset),]
-GO_IL1b$dataset <- factor(GO_IL1b$dataset, levels=c("IL1b_broad_Data", "IL1b_Macrophages_Data", "IL1b_CD4TCells_Data", "IL1b_CD8TCells_Data", "IL1b_BCells_Data"))
+GO_IL1b$dataset <- factor(GO_IL1b$dataset, levels=c("IL1b_Macrophages_Data", "IL1b_CD4TCells_Data", "IL1b_CD8TCells_Data", "IL1b_BCells_Data"))
 GO_IL1b <- GO_IL1b[GO_IL1b$Significant > 4,]
 
 png(filename='Results/GO_IL1b.png', height=1080, width=1080)
@@ -724,14 +709,14 @@ ggplot(GO_IL1b, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   geom_jitter(width = 0.2, height = 0) +
   labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
-  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD8 T Cells")) +
-  scale_color_manual(values=c('#898888', '#E31A1C', '#33A02C')) +
+  scale_x_discrete(labels= c("Macrophages", "CD8 T Cells")) +
+  scale_color_manual(values=c('#E31A1C', '#33A02C')) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
 
 GO_IFI6 <- All_GO_Results[grep("IFI6", All_GO_Results$dataset),]
-GO_IFI6$dataset <- factor(GO_IFI6$dataset, levels=c("IFI6_broad_Data", "IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_BCells_Data"))
+GO_IFI6$dataset <- factor(GO_IFI6$dataset, levels=c("IFI6_Macrophages_Data", "IFI6_CD4TCells_Data", "IFI6_CD8TCells_Data", "IFI6_BCells_Data"))
 GO_IFI6 <- GO_IFI6[GO_IFI6$Significant > 19,]
 
 png(filename='Results/GO_IFI6.png', height=1080, width=1080)
@@ -741,8 +726,8 @@ ggplot(GO_IFI6, aes(x=dataset, y=-log(as.numeric(classicFisher)), size=Significa
   geom_jitter(width = 0.2, height = 0) +
   labs(color=NULL, size="count DE genes") + 
   ylab("-log(p-value)") + xlab(NULL) +
-  scale_x_discrete(labels= c("All Cells", "Macrophages", "CD4 T Cells", "B Cells")) +
-  scale_color_manual(values=c('#898888', '#E31A1C', '#6DE602', '#00A7FF')) +
+  scale_x_discrete(labels= c("Macrophages", "CD4 T Cells", "B Cells")) +
+  scale_color_manual(values=c('#E31A1C', '#6DE602', '#00A7FF')) +
   guides(color="none") + 
   scale_size_area(max_size = 10)
 dev.off()
