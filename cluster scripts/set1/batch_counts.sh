@@ -6,8 +6,6 @@
 
 module load cellranger
 
-## it's a bit annoying to get this directory structure through bash, so we'll just list the directories in the correct order for samples 1-6
-
 fqlocs=("HHGWKBGXM/outs/fastq_path/HHGWKBGXM" "HHGWKBGXM/outs/fastq_path/HHGWKBGXM" "HHGVNBGXM/outs/fastq_path/HHGVNBGXM" "HHGVNBGXM/outs/fastq_path/HHGVNBGXM" "HJGFMBGXK/outs/fastq_path/HJGFMBGXK" "HJGFMBGXK/outs/fastq_path/HJGFMBGXK")
 
 n=$(expr $SLURM_ARRAY_TASK_ID - 1)

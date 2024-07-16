@@ -427,11 +427,9 @@ CD4: 7, 10, 18b, 20a
 
 CD8: 6, 18a, 20b
 
-Macrophage/Monocyte/DC: 1, 4, 8, 13, 15
+Macrophage: 1, 4, 8
 
 B: 2, 3, 12, 16
-
-This leaves clusters 14 and 21 unconsidered as we are not completely sure how they were sorted.
 
 After running each of the sorted groups separately, we'll also run a global differential abundance analysis that ignores the sorting strategy, just out of interest. In theory, if the same proportions of each sorted population were indeed pooled for sequencing, the results should be very similar and will give us a chance to look at the clusters that we were not able to assign to a sorted class.
 
@@ -441,13 +439,13 @@ CD4s <- sce_all_filt[,sce_all_filt$cluster %in% c('7', '10', '18b', '20a')]
 
 CD8s <- sce_all_filt[,sce_all_filt$cluster %in% c('6', '18a', '20b')]
 
-MMDs <- sce_all_filt[,sce_all_filt$cluster %in% c('1', '4', '8', '13', '15')]
+MPs <- sce_all_filt[,sce_all_filt$cluster %in% c('1', '4', '8')]
 
 Bs <- sce_all_filt[,sce_all_filt$cluster %in% c('2', '3', '12', '16')]
 
 all <- sce_all_filt
 
-subsets <- list(CD4s=CD4s, CD8s=CD8s, MMDs=MMDs, Bs=Bs, all=all)
+subsets <- list(CD4s=CD4s, CD8s=CD8s, Macrophages=MPs, Bs=Bs, all=all)
 
 ```
 
@@ -479,6 +477,10 @@ DA <- lapply(subsets, function(x){
 })
 
 DA
+
+for (i in 1:length(DA)){
+  write.table(DA[[i]], file=paste0('Results/DA_', names(DA)[i], '.txt'), quote=FALSE, sep='\t')
+}
 ```
 
 Interestingly, the only strong effect here is on the proportion of Treg in with vaccine + IL1b. Let's plot it to have a look.

@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Intro
 
-Following on from 'differential_all'. This script delineates patterns of differential gene expression and co-expression between our experimental conditions (differential co-expression) using the nebula package. 
+Following on from 'differential_all'. This script delineates patterns of differential gene expression and co-expression between our experimental conditions using the nebula package. 
 
 **RAM requirements scale exponentially with CPU cores**
 
@@ -464,21 +464,21 @@ png(filename='Results/Venn_PH1N1.png', height=1080, width=1600)
 PH1N1_Set = list(Macrophages=Create_Set(PH1N1_Macrophages_Data), CD4_T_Cells=Create_Set(PH1N1_CD4TCells_Data), CD8_T_Cells=Create_Set(PH1N1_CD8TCells_Data), B_Cells=Create_Set(PH1N1_BCells_Data))
 #PH1N1_Set <- list_drop_empty(PH1N1_Set)
 options("warn"=-1)
-venndir(PH1N1_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
+venndir(PH1N1_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(2.8,3,3), overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_HANP.png', height=1080, width=1600)
 HANP_Set = list(Macrophages=Create_Set(HANP_Macrophages_Data), CD4_T_Cells=Create_Set(HANP_CD4TCells_Data), CD8_T_Cells=Create_Set(HANP_CD8TCells_Data), B_Cells=Create_Set(HANP_BCells_Data))
 #HANP_Set <- list_drop_empty(HANP_Set)
 options("warn"=-1)
-venndir(HANP_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
+venndir(HANP_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(2.8,3,3), overlap_type="each")
 dev.off()
 
 png(filename='Results/Venn_IL1b.png', height=1080, width=1600)
 IL1b_Set = list(Macrophages=Create_Set(IL1b_Macrophages_Data), CD4_T_Cells=Create_Set(IL1b_CD4TCells_Data), CD8_T_Cells=Create_Set(IL1b_CD8TCells_Data), B_Cells=Create_Set(IL1b_BCells_Data))
 #IL1b_Set <- list_drop_empty(IL1b_Set)
 options("warn"=-1)
-venndir(IL1b_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
+venndir(IL1b_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(2.8,3,3), overlap_type="each")
 dev.off()
 
 Create_Set2 <- function(Data){
@@ -498,7 +498,7 @@ png(filename='Results/Venn_IFI6.png', height=1080, width=1600)
 IFI6_Set = list(Macrophages=Create_Set2(IFI6_Macrophages_Data), CD4_T_Cells=Create_Set2(IFI6_CD4TCells_Data), CD8_T_Cells=Create_Set2(IFI6_CD8TCells_Data), B_Cells=Create_Set2(IFI6_BCells_Data))
 #IFI6_Set <- list_drop_empty(IFI6_Set)
 options("warn"=-1)
-venndir(IFI6_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(3,2,2), overlap_type="each")
+venndir(IFI6_Set, poly_alpha=0.5, proportional=F, set_colors = set_colours, font_cex = c(2.8,3,3), overlap_type="each")
 dev.off()
 
 ```

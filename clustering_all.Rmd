@@ -266,7 +266,7 @@ Based on this and discussion among ourselves, we have decided to define this clu
 
 Upon closer inspection and attempted annotation, we discovered that there are a couple of clusters that might benefit from subclustering. Specifically, clusters 14, 18 and 20 are composed of a mixture of CD4 and CD8 T cells, and to run differential abundance analyses according to sorted cell types we'll need to separate these. In addition, cluster 9 appears to be a heterogeneous mixture of cells expressing CD3 (T cells) and cells not expressing CD3, suggesting that it may benefit from subclustering.
 
-In order to run subclustering, we start by subsetting cells in the cluster of interest. In an ideal world, CD4 and CD8 T cell-associated genes would dominate the highly variable genes and enable unsupervised sub-clustering to separate the cell types. Unfortunately, this is often not the case. We therefore need to supervise the clustering. To this end, we pull out CD4 and CD8B genes that encode the markers used for sorting and use a zero-inflated Kendall's Tau correlation metric implemented in SCHOT to identify the top genes among the highly variable genes correlated with these markers. We then use this filtered list for subclustering.
+In order to run subclustering, we start by subsetting cells in the cluster of interest. In an ideal world, CD4 and CD8 T cell-associated genes would dominate the highly variable genes and enable unsupervised sub-clustering to separate the cell types. Unfortunately, this is often not the case. We therefore need to select genes for the clustering. To this end, we pull out CD4 and CD8B genes that encode the markers used for sorting and use a zero-inflated Kendall's Tau correlation metric implemented in SCHOT to identify the top genes among the highly variable genes correlated with these markers. We then use this filtered list for subclustering.
 
 We'll start with cluster 14.
 
@@ -315,7 +315,7 @@ plotExpression(sce_all_14, features=CD4CD8, x='cluster', exprs_values='logcounts
 
 ```
 
-Unfortunately, cluster 14 does not subcluster well, even in a supervised manner, into  CD4+ and CD8+ groups. We've tried several different mixtures of parameters and it just doesn't split. In fact, expression of CD4 and CD8 is more of a continuum in this cluster instead of bimodal as well. 
+Unfortunately, cluster 14 does not subcluster well, even using selected genes, into  CD4+ and CD8+ groups. We've tried several different mixtures of parameters and it just doesn't split. In fact, expression of CD4 and CD8 is more of a continuum in this cluster instead of bimodal as well. 
 
 Let's eyeball whether there are different proportions of cells in this cluster by condition.
 
@@ -482,7 +482,7 @@ plotExpression(sce_all_9, features=genes, x='cluster', exprs_values='logcounts')
 
 ```
 
-This yields 3 subclusters, one which appears to be mainly CD3E/CD8A+, one which appears to have high KLRB1, and the other which is intermediate and likely marked by other genes. We'll go with this level of unsupervised subclustering so that we can extract the T cells and will have to think about the identities of the other subclusters later as well. 
+This yields 3 subclusters, one which appears to be mainly CD3E/CD8A+, one which appears to have high KLRB1, and the other which is intermediate and likely marked by other genes. We'll go with this level of subclustering so that we can extract the T cells and will have to think about the identities of the other subclusters later as well.  
 
 ```{r}
 
