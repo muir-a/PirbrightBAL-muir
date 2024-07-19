@@ -1,6 +1,7 @@
 # PirbrightBAL-muir
 
 This repository contains analysis markdown files and scripts for analysing porcine BAL scRNAseq data as a collaborative work between the Babraham institute and Pirbright Institute. Results are now published in PLOS Pathogens, titled; 'Single-cell analysis reveals lasting immunological consequences of influenza infection and respiratory immunisation in the pig lung'.
+https://doi.org/10.1371/journal.ppat.1011910
 
 Original unprocessed data can be downloaded from GEO(GSE249866).
 https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE249866
